@@ -334,41 +334,6 @@ export BYTEBOT_LLM_PROXY_URL=http://localhost:4000
 docker-compose up -d
 ```
 
-## Kubernetes Setup
-
-Deploy with Helm:
-
-```yaml
-# litellm-values.yaml
-replicaCount: 2
-
-image:
-  repository: ghcr.io/berriai/litellm
-  tag: main
-
-service:
-  type: ClusterIP
-  port: 4000
-
-config:
-  model_list:
-    - model_name: claude-3-5-sonnet
-      litellm_params:
-        model: claude-3-5-sonnet-20241022
-        api_key: ${ANTHROPIC_API_KEY}
-  
-  general_settings:
-    master_key: ${LITELLM_MASTER_KEY}
-
-# Then in Bytebot values.yaml:
-agent:
-  openai:
-    enabled: true
-    apiKey: "${LITELLM_MASTER_KEY}"
-    baseUrl: "http://litellm:4000/v1"
-    model: "claude-3-5-sonnet"
-```
-
 ## Monitoring & Debugging
 
 ### LiteLLM Dashboard

@@ -17,14 +17,16 @@
 [🌐 Website](https://bytebot.ai) • [📚 Documentation](https://docs.bytebot.ai) • [💬 Discord](https://discord.com/invite/d9ewZkWPTP) • [𝕏 Twitter](https://x.com/bytebot_ai)
 
 <!-- Keep these links. Translations will automatically update with the README. -->
-[Deutsch](https://zdoc.app/de/bytebot-ai/bytebot) | 
-[Español](https://zdoc.app/es/bytebot-ai/bytebot) | 
-[français](https://zdoc.app/fr/bytebot-ai/bytebot) | 
-[日本語](https://zdoc.app/ja/bytebot-ai/bytebot) | 
-[한국어](https://zdoc.app/ko/bytebot-ai/bytebot) | 
-[Português](https://zdoc.app/pt/bytebot-ai/bytebot) | 
-[Русский](https://zdoc.app/ru/bytebot-ai/bytebot) | 
+
+[Deutsch](https://zdoc.app/de/bytebot-ai/bytebot) |
+[Español](https://zdoc.app/es/bytebot-ai/bytebot) |
+[français](https://zdoc.app/fr/bytebot-ai/bytebot) |
+[日本語](https://zdoc.app/ja/bytebot-ai/bytebot) |
+[한국어](https://zdoc.app/ko/bytebot-ai/bytebot) |
+[Português](https://zdoc.app/pt/bytebot-ai/bytebot) |
+[Русский](https://zdoc.app/ru/bytebot-ai/bytebot) |
 [中文](https://zdoc.app/zh/bytebot-ai/bytebot)
+
 </div>
 
 ---
@@ -254,22 +256,6 @@ Use any AI provider through our [LiteLLM integration](https://docs.bytebot.ai/de
 - AWS Bedrock
 - Local models via Ollama
 - 100+ other providers
-
-### Enterprise Deployment
-
-Deploy on Kubernetes with Helm:
-
-```bash
-# Clone the repository
-git clone https://github.com/bytebot-ai/bytebot.git
-cd bytebot
-
-# Install with Helm
-helm install bytebot ./helm \
-  --set agent.env.ANTHROPIC_API_KEY=sk-ant-...
-```
-
-[Enterprise deployment guide →](https://docs.bytebot.ai/deployment/helm)
 
 ## Community & Support
 

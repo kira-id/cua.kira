@@ -29,7 +29,6 @@
             "group": "Deployment",
             "pages": [
               "deployment/railway",
-              "deployment/helm",
               "deployment/litellm"
             ]
           },

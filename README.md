@@ -96,9 +96,9 @@ git clone https://github.com/bytebot-ai/bytebot.git
 cd bytebot
 
 # Add your AI provider key (choose one)
-echo "ANTHROPIC_API_KEY=sk-ant-..." > docker/.env
-# Or: echo "OPENAI_API_KEY=sk-..." > docker/.env
-# Or: echo "GEMINI_API_KEY=..." > docker/.env
+echo "ANTHROPIC_API_KEY='sk-ant-...'" > docker/.env
+# Or: echo "OPENAI_API_KEY='sk-...'" > docker/.env
+# Or: echo "GEMINI_API_KEY='...'" > docker/.env
 
 docker-compose -f docker/docker-compose.yml up -d
 

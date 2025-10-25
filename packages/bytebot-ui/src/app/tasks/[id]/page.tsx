@@ -83,7 +83,7 @@ export default function TaskPage() {
   }
 
   // Use scroll screenshot hook for inactive tasks
-  const { currentScreenshot } = useScrollScreenshot({
+  const { currentScreenshot, selectScreenshotById } = useScrollScreenshot({
     messages,
     scrollContainerRef: chatContainerRef,
   });
@@ -207,6 +207,7 @@ export default function TaskPage() {
                 isLoadingMoreMessages={isLoadingMoreMessages}
                 hasMoreMessages={hasMoreMessages}
                 loadMoreMessages={loadMoreMessages}
+                onScreenshotSelect={selectScreenshotById}
               />
             </div>
           </div>

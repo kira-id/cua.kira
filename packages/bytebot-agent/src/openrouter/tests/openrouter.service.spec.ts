@@ -188,6 +188,60 @@ describe('OpenRouterService', () => {
         ),
       ).rejects.toThrow('BytebotAgentInterrupt');
     });
+
+    it('should handle structured content responses with tool use', async () => {
+      const mockResponse = {
+        choices: [
+          {
+            message: {
+              content: [
+                {
+                  type: 'output_text',
+                  text: 'Executing wait tool',
+                },
+                {
+                  type: 'tool_use',
+                  id: 'call_123',
+                  name: 'computer_wait',
+                  input: {
+                    duration: 500,
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        usage: {
+          prompt_tokens: 5,
+          completion_tokens: 3,
+          total_tokens: 8,
+        },
+      };
+
+      (fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockResponse),
+      });
+
+      const result = await service.generateMessage(
+        'You are a helpful assistant',
+        [mockMessage],
+        'anthropic/claude-3.5-sonnet',
+        true,
+      );
+
+      expect(result.contentBlocks).toHaveLength(2);
+      expect(result.contentBlocks[0]).toEqual({
+        type: MessageContentType.Text,
+        text: 'Executing wait tool',
+      });
+      expect(result.contentBlocks[1]).toEqual({
+        type: MessageContentType.ToolUse,
+        id: 'call_123',
+        name: 'computer_wait',
+        input: { duration: 500 },
+      });
+    });
   });
 
   describe('send', () => {

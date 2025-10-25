@@ -1,0 +1,42 @@
+version: "3.8"
+
+services:
+  webtop:
+    image: lscr.io/linuxserver/webtop:ubuntu-xfce
+    container_name: webtop
+    entrypoint: ["/bin/sh", "-c", "rm -f /run/dbus/pid && exec /init"]
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Jakarta
+      # - PASSWORD=yourpassword
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    volumes:
+      - webtop_config:/config
+    shm_size: "1gb"
+    restart: unless-stopped
+
+    # ---- fork-bomb protection ----
+    ulimits:
+      nproc: 4096
+      nofile:
+        soft: 8192
+        hard: 16384
+
+    # Keep logs tiny (prevents "stdout spam" from filling disk)
+    logging:
+      driver: local
+      options:
+        max-size: "1m"
+        max-file: "3"
+
+    # Optional: only effective in Swarm; harmless otherwise
+    deploy:
+      resources:
+        limits:
+          pids: 512
+
+volumes:
+  webtop_config:

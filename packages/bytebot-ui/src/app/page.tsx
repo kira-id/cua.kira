@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Header } from "@/components/layout/Header";
 import { ChatInput } from "@/components/messages/ChatInput";
 import { useRouter } from "next/navigation";
@@ -11,10 +11,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { startTask } from "@/utils/taskUtils";
-import { Model } from "@/types";
+import { startTask, fetchTasks, takeOverTask, resumeTask } from "@/utils/taskUtils";
+import { Model, Task, TaskStatus, Role } from "@/types";
 import { TaskList } from "@/components/tasks/TaskList";
-import { VncViewer } from "@/components/vnc/VncViewer";
+import { DesktopContainer } from "@/components/ui/desktop-container";
+import { Button } from "@/components/ui/button";
+import { VirtualDesktopStatus } from "@/components/VirtualDesktopStatusHeader";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 interface FileWithBase64 {
   name: string;
@@ -29,12 +32,14 @@ export default function Home() {
   const [models, setModels] = useState<Model[]>([]);
   const [selectedModel, setSelectedModel] = useState<Model | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<FileWithBase64[]>([]);
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
+  const [isInteractive, setIsInteractive] = useState(false);
+  const [isLoadingDesktop, setIsLoadingDesktop] = useState(false);
+  const [desktopError, setDesktopError] = useState<string | null>(null);
+  const [isUpdatingControl, setIsUpdatingControl] = useState(false);
   const router = useRouter();
-  const [activePopoverIndex, setActivePopoverIndex] = useState<number | null>(
-    null,
-  );
-  const popoverRef = useRef<HTMLDivElement>(null);
-  const buttonsRef = useRef<HTMLDivElement>(null);
+  const activeTaskId = activeTask?.id ?? null;
 
   useEffect(() => {
     fetch("/api/tasks/models")
@@ -46,35 +51,157 @@ export default function Home() {
       .catch((err) => console.error("Failed to load models", err));
   }, []);
 
-  // Close popover when clicking outside or pressing ESC
+  const loadActiveTask = useCallback(async () => {
+    setIsLoadingDesktop(true);
+    setDesktopError(null);
+
+    try {
+      const activeStatuses = [TaskStatus.RUNNING, TaskStatus.NEEDS_HELP];
+      const activeResult = await fetchTasks({
+        limit: 1,
+        statuses: activeStatuses,
+      });
+
+      let task = activeResult.tasks[0];
+
+      if (!task) {
+        const fallbackResult = await fetchTasks({ limit: 1 });
+        task = fallbackResult.tasks[0];
+      }
+
+      if (task) {
+        setActiveTask(task);
+        setTaskStatus(task.status);
+        setIsInteractive(task.control === Role.USER);
+      } else {
+        setActiveTask(null);
+        setTaskStatus(null);
+      }
+    } catch (error) {
+      console.error("Failed to load active task", error);
+      setDesktopError("Failed to load active task");
+    } finally {
+      setIsLoadingDesktop(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    loadActiveTask();
+  }, [loadActiveTask]);
+
+  const handleTaskUpdate = useCallback(
+    (updatedTask: Task) => {
+      if (!updatedTask) return;
+
+      if (activeTaskId && updatedTask.id === activeTaskId) {
+        setActiveTask(updatedTask);
+        setTaskStatus(updatedTask.status);
+        setIsInteractive(updatedTask.control === Role.USER);
+
+        if (
+          updatedTask.status === TaskStatus.COMPLETED ||
+          updatedTask.status === TaskStatus.CANCELLED ||
+          updatedTask.status === TaskStatus.FAILED
+        ) {
+          loadActiveTask();
+        }
+        return;
+      }
+
       if (
-        popoverRef.current &&
-        !popoverRef.current.contains(event.target as Node) &&
-        buttonsRef.current &&
-        !buttonsRef.current.contains(event.target as Node)
+        !activeTaskId &&
+        (updatedTask.status === TaskStatus.RUNNING ||
+          updatedTask.status === TaskStatus.NEEDS_HELP)
       ) {
-        setActivePopoverIndex(null);
+        setActiveTask(updatedTask);
+        setTaskStatus(updatedTask.status);
+        setIsInteractive(updatedTask.control === Role.USER);
       }
-    };
+    },
+    [activeTaskId, loadActiveTask],
+  );
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setActivePopoverIndex(null);
+  const handleTaskCreated = useCallback(
+    (newTask: Task) => {
+      if (!newTask) return;
+
+      if (
+        !activeTaskId &&
+        (newTask.status === TaskStatus.RUNNING ||
+          newTask.status === TaskStatus.NEEDS_HELP)
+      ) {
+        setActiveTask(newTask);
+        setTaskStatus(newTask.status);
+        setIsInteractive(newTask.control === Role.USER);
       }
-    };
+    },
+    [activeTaskId],
+  );
 
-    if (activePopoverIndex !== null) {
-      document.addEventListener("mousedown", handleClickOutside);
-      document.addEventListener("keydown", handleKeyDown);
+  const handleTaskDeleted = useCallback(
+    (deletedTaskId: string) => {
+      if (activeTaskId && deletedTaskId === activeTaskId) {
+        setActiveTask(null);
+        setTaskStatus(null);
+        setIsInteractive(false);
+        loadActiveTask();
+      }
+    },
+    [activeTaskId, loadActiveTask],
+  );
+
+  const { joinTask, leaveTask } = useWebSocket({
+    onTaskUpdate: handleTaskUpdate,
+    onTaskCreated: handleTaskCreated,
+    onTaskDeleted: handleTaskDeleted,
+  });
+
+  useEffect(() => {
+    if (!activeTaskId) {
+      leaveTask();
+      return;
     }
 
+    joinTask(activeTaskId);
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleKeyDown);
+      leaveTask();
     };
-  }, [activePopoverIndex]);
+  }, [activeTaskId, joinTask, leaveTask]);
+
+  const handleToggleControl = useCallback(async () => {
+    const nextMode = !isInteractive;
+    setDesktopError(null);
+    setIsInteractive(nextMode);
+
+    if (!activeTaskId) {
+      return;
+    }
+
+    setIsUpdatingControl(true);
+    try {
+      const updatedTask = nextMode
+        ? await takeOverTask(activeTaskId)
+        : await resumeTask(activeTaskId);
+
+      if (!updatedTask) {
+        throw new Error("No response from server");
+      }
+
+      setActiveTask(updatedTask);
+      setTaskStatus(updatedTask.status);
+      setIsInteractive(updatedTask.control === Role.USER);
+    } catch (error) {
+      console.error("Error toggling control:", error);
+      setDesktopError(
+        nextMode
+          ? "Unable to take over right now. Try again in a moment."
+          : "Unable to switch back to view-only right now.",
+      );
+      setIsInteractive(!nextMode);
+    } finally {
+      setIsUpdatingControl(false);
+    }
+  }, [activeTaskId, isInteractive]);
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -117,6 +244,21 @@ export default function Home() {
   const handleFileUpload = (files: FileWithBase64[]) => {
     setUploadedFiles(files);
   };
+
+  const viewOnly = !isInteractive;
+
+  const desktopStatus: VirtualDesktopStatus = (() => {
+    if (isInteractive) return "user_control";
+    if (!taskStatus) return "pending";
+    if (taskStatus === TaskStatus.RUNNING) return "running";
+    if (taskStatus === TaskStatus.NEEDS_HELP) return "needs_attention";
+    if (taskStatus === TaskStatus.FAILED) return "failed";
+    if (taskStatus === TaskStatus.CANCELLED) return "canceled";
+    if (taskStatus === TaskStatus.COMPLETED) return "completed";
+    return "pending";
+  })();
+
+  const controlButtonLabel = isInteractive ? "View Only" : "Take Over";
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -174,13 +316,48 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Full desktop direct control area - dominant right side */}
-          <div className="flex-1 m-4 mb-8">
-            <div className="border border-bytebot-bronze-light-7 rounded-lg p-4 h-full flex flex-col">
-              <h3 className="text-bytebot-bronze-light-12 text-lg font-semibold mb-4 text-center">Live Control</h3>
-              <div className="flex-1">
-                <VncViewer viewOnly={false} />
+          {/* Full desktop takeover area - dominant right side */}
+          <div className="flex-1 px-6 pb-4 pt-6">
+            <div className="flex h-full flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-bytebot-bronze-light-12 text-lg font-semibold">
+                  Live Control
+                </h3>
+                <Button
+                  onClick={handleToggleControl}
+                  variant={isInteractive ? "secondary" : "default"}
+                  size="sm"
+                  disabled={isUpdatingControl}
+                >
+                  {isUpdatingControl ? "Updating..." : controlButtonLabel}
+                </Button>
               </div>
+
+              <DesktopContainer
+                className="flex-1 shadow-sm"
+                viewOnly={viewOnly}
+                status={desktopStatus}
+              />
+
+              {desktopError && (
+                <p className="text-sm text-red-500">
+                  {desktopError}
+                </p>
+              )}
+
+              {!desktopError && (
+                <p className="text-sm text-bytebot-bronze-light-11">
+                  {isInteractive
+                    ? "You currently control the desktop. Click View Only to hand control back."
+                    : "You're in view-only mode. Click Take Over to interact, even without an active task."}
+                </p>
+              )}
+
+              {isLoadingDesktop && (
+                <p className="text-xs text-bytebot-bronze-light-10">
+                  Checking desktop status...
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -195,7 +372,7 @@ export default function Home() {
                 </h1>
               </div>
 
-              <div className="bg-bytebot-bronze-light-2 border-bytebot-bronze-light-5 borderw-full mb-10 rounded-2xl p-2">
+              <div className="bg-bytebot-bronze-light-2 border-bytebot-bronze-light-5 mb-10 w-full rounded-2xl border p-2">
                 <ChatInput
                   input={input}
                   isLoading={isLoading}

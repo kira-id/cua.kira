@@ -6,6 +6,7 @@ export interface ScreenshotData {
   base64Data: string;
   messageIndex: number;
   blockIndex: number;
+  contentIndex: number;
 }
 
 /**
@@ -26,6 +27,7 @@ export function extractScreenshots(messages: Message[]): ScreenshotData[] {
               base64Data: contentItem.source.data,
               messageIndex,
               blockIndex,
+              contentIndex,
             });
           }
         });

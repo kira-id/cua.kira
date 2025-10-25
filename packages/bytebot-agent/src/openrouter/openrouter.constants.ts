@@ -3,6 +3,12 @@ import { BytebotAgentModel } from '../agent/agent.types';
 export const OPENROUTER_MODELS: BytebotAgentModel[] = [
   {
     provider: 'openrouter',
+    name: 'qwen/qwen3-vl-235b-a22b-instruct',
+    title: 'Qwen3 VL 235B (OpenRouter)',
+    contextWindow: 262000,
+  },
+  {
+    provider: 'openrouter',
     name: 'anthropic/claude-3.5-sonnet',
     title: 'Claude 3.5 Sonnet (OpenRouter)',
     contextWindow: 200000,

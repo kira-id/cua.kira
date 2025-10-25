@@ -50,6 +50,16 @@ app
       });
     });
 
+    // Proxy for settings API endpoints
+    const settingsProxy = createProxyMiddleware({
+      target: BYTEBOT_AGENT_BASE_URL,
+      changeOrigin: true,
+      pathRewrite: {
+        '^/api/settings': '/api-keys'
+      },
+    });
+    expressApp.use("/api/settings", settingsProxy);
+
     // Handle all other requests with Next.js
     expressApp.all("*", (req, res) => handle(req, res));
 

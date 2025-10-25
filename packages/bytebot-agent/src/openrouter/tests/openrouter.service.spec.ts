@@ -114,6 +114,7 @@ describe('OpenRouterService', () => {
       taskId: 'task-1',
       createdAt: new Date(),
       updatedAt: new Date(),
+      summaryId: null,
     };
 
     it('should generate a response successfully', async () => {
@@ -190,13 +191,13 @@ describe('OpenRouterService', () => {
   });
 
   describe('send', () => {
-    it('should be an alias for generateMessage', async () => {
-      const spy = jest.spyOn(service, 'generateMessage').mockResolvedValueOnce({
+    it('should be used by generateMessage', async () => {
+      const spy = jest.spyOn(service, 'send').mockResolvedValueOnce({
         contentBlocks: [],
         tokenUsage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
       });
 
-      await service.send('system', [], 'model', true);
+      await service.generateMessage('system', [], 'model', true);
 
       expect(spy).toHaveBeenCalledWith('system', [], 'model', true, undefined);
     });

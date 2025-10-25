@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import Image from "next/image";
 import { Header } from "@/components/layout/Header";
 import { ChatInput } from "@/components/messages/ChatInput";
 import { useRouter } from "next/navigation";
@@ -15,24 +14,7 @@ import {
 import { startTask } from "@/utils/taskUtils";
 import { Model } from "@/types";
 import { TaskList } from "@/components/tasks/TaskList";
-
-interface StockPhotoProps {
-  src: string;
-  alt?: string;
-}
-
-const StockPhoto: React.FC<StockPhotoProps> = ({
-  src,
-  alt = "Decorative image",
-}) => {
-  return (
-    <div className="h-full w-full overflow-hidden rounded-lg bg-white">
-      <div className="relative h-full w-full">
-        <Image src={src} alt={alt} fill className="object-cover" priority />
-      </div>
-    </div>
-  );
-};
+import { VncViewer } from "@/components/vnc/VncViewer";
 
 interface FileWithBase64 {
   name: string;
@@ -141,10 +123,10 @@ export default function Home() {
       <Header />
 
       <main className="flex flex-1 flex-col overflow-hidden">
-        {/* Desktop grid layout (50/50 split) - only visible on large screens */}
-        <div className="hidden h-full p-8 lg:grid lg:grid-cols-2 lg:gap-8">
-          {/* Main content area */}
-          <div className="flex flex-col items-center overflow-y-auto">
+        {/* Desktop grid layout (left sidebar, right full desktop control) - only visible on large screens */}
+        <div className="hidden h-full lg:flex">
+          {/* Main content area - narrow left sidebar */}
+          <div className="flex w-1/3 flex-col items-center overflow-y-auto p-8">
             <div className="flex w-full max-w-xl flex-col items-center">
               <div className="mb-6 flex w-full flex-col items-start justify-start">
                 <h1 className="text-bytebot-bronze-light-12 mb-1 text-2xl">
@@ -192,10 +174,13 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Stock photo area - centered in its grid cell */}
-          <div className="flex items-center justify-center px-6 pt-6">
-            <div className="aspect-square h-full w-full max-w-md xl:max-w-2xl">
-              <StockPhoto src="/stock-1.png" alt="Bytebot stock image" />
+          {/* Full desktop direct control area - dominant right side */}
+          <div className="flex-1 m-4 mb-8">
+            <div className="border border-bytebot-bronze-light-7 rounded-lg p-4 h-full flex flex-col">
+              <h3 className="text-bytebot-bronze-light-12 text-lg font-semibold mb-4 text-center">Live Control</h3>
+              <div className="flex-1">
+                <VncViewer viewOnly={false} />
+              </div>
             </div>
           </div>
         </div>

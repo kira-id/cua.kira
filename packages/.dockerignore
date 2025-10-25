@@ -3,7 +3,7 @@
 **/.next
 **/.git
 **/.vscode
+**/.idea
 **/.env*
-**/npm-debug.log
-**/yarn-debug.log
-**/yarn-error.log
+**/*.log
+**/*.tmp

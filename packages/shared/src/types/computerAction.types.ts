@@ -5,6 +5,7 @@ export type Application =
   | "firefox"
   | "1password"
   | "thunderbird"
+  | "blender"
   | "vscode"
   | "terminal"
   | "desktop"

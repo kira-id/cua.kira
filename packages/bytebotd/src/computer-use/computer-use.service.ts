@@ -22,6 +22,44 @@ import {
   ReadFileAction,
 } from '@bytebot/shared';
 
+const execAsync = promisify(exec);
+
+const DESKTOP_DISPLAY = ':0.0';
+const DEFAULT_APP_WAIT_TIMEOUT_MS = 8000;
+const WINDOW_POLL_INTERVAL_MS = 500;
+
+type LaunchCommand = {
+  command: string;
+  args?: string[];
+};
+
+const APPLICATION_LAUNCH_COMMANDS: Partial<Record<Application, LaunchCommand>> =
+  {
+    firefox: { command: 'firefox-esr' },
+    '1password': { command: '1password' },
+    thunderbird: { command: 'thunderbird' },
+    blender: { command: 'blender' },
+    vscode: { command: 'code' },
+    terminal: { command: 'xfce4-terminal' },
+    directory: { command: 'thunar' },
+  };
+
+const APPLICATION_WINDOW_CLASSES: Record<Application, string[]> = {
+  firefox: ['Navigator.firefox-esr', 'firefox-esr.Firefox'],
+  '1password': ['1password.1Password'],
+  thunderbird: ['Mail.thunderbird'],
+  blender: ['blender.Blender', 'Blender.blender', 'blender.blender'],
+  vscode: ['code.Code', 'code.code'],
+  terminal: ['xfce4-terminal.Xfce4-Terminal', 'xfce4-terminal.xfce4-terminal'],
+  directory: ['Thunar', 'thunar.Thunar'],
+  desktop: ['xfdesktop.Xfdesktop', 'xfdesktop.xfdesktop'],
+};
+
+const APPLICATION_WAIT_TIMEOUTS: Partial<Record<Application, number>> = {
+  blender: 20000,
+  vscode: 12000,
+};
+
 @Injectable()
 export class ComputerUseService {
   private readonly logger = new Logger(ComputerUseService.name);
@@ -261,104 +299,148 @@ export class ComputerUseService {
     return await this.nutService.getCursorPosition();
   }
 
-  private async application(action: ApplicationAction): Promise<void> {
-    const execAsync = promisify(exec);
+  private getWindowMatchers(application: Application): string[] {
+    return APPLICATION_WINDOW_CLASSES[application] ?? [];
+  }
 
-    // Helper to spawn a command and forget about it
+  private async listWindows(): Promise<string> {
+    try {
+      const { stdout } = await execAsync(
+        `sudo -u user env DISPLAY=${DESKTOP_DISPLAY} wmctrl -lx`,
+        {
+          timeout: 5000,
+        },
+      );
+      return stdout.toLowerCase();
+    } catch (error) {
+      this.logger.warn(`wmctrl list failed: ${(error as Error).message}`);
+      return '';
+    }
+  }
+
+  private async isApplicationOpen(application: Application): Promise<boolean> {
+    const matchers = this.getWindowMatchers(application).map((matcher) =>
+      matcher.toLowerCase(),
+    );
+    if (matchers.length === 0) {
+      return false;
+    }
+
+    const windows = await this.listWindows();
+    return matchers.some((matcher) => windows.includes(matcher));
+  }
+
+  private async waitForApplicationWindow(
+    application: Application,
+  ): Promise<boolean> {
+    const timeout =
+      APPLICATION_WAIT_TIMEOUTS[application] ?? DEFAULT_APP_WAIT_TIMEOUT_MS;
+    const deadline = Date.now() + timeout;
+
+    while (Date.now() < deadline) {
+      if (await this.isApplicationOpen(application)) {
+        return true;
+      }
+      await this.delay(WINDOW_POLL_INTERVAL_MS);
+    }
+
+    return false;
+  }
+
+  private async application(action: ApplicationAction): Promise<void> {
     const spawnAndForget = (
       command: string,
       args: string[],
       options: Record<string, any> = {},
     ): void => {
       const child = spawn(command, args, {
-        env: { ...process.env, DISPLAY: ':0.0' }, // ensure DISPLAY is set for GUI tools
+        env: { ...process.env, DISPLAY: DESKTOP_DISPLAY },
         stdio: 'ignore',
         detached: true,
         ...options,
       });
-      child.unref(); // Allow the parent process to exit independently
+      child.unref();
     };
 
-    if (action.application === 'desktop') {
-      spawnAndForget('sudo', ['-u', 'user', 'wmctrl', '-k', 'on']);
-      return;
-    }
-
-    const commandMap: Record<string, string> = {
-      firefox: 'firefox-esr',
-      '1password': '1password',
-      thunderbird: 'thunderbird',
-      vscode: 'code',
-      terminal: 'xfce4-terminal',
-      directory: 'thunar',
-    };
-
-    const processMap: Record<Application, string> = {
-      firefox: 'Navigator.firefox-esr',
-      '1password': '1password.1Password',
-      thunderbird: 'Mail.thunderbird',
-      vscode: 'code.Code',
-      terminal: 'xfce4-terminal.Xfce4-Terminal',
-      directory: 'Thunar',
-      desktop: 'xfdesktop.Xfdesktop',
-    };
-
-    // check if the application is already open using wmctrl -lx
-    let appOpen = false;
-    try {
-      const { stdout } = await execAsync(
-        `sudo -u user wmctrl -lx | grep ${processMap[action.application]}`,
-        { timeout: 5000 }, // 5 second timeout
-      );
-      appOpen = stdout.trim().length > 0;
-    } catch (error: any) {
-      // grep returns exit code 1 when no match is found – treat as "not open"
-      // Also handle timeout errors
-      if (error.code !== 1 && !error.message?.includes('timeout')) {
-        throw error;
+    const focusWindow = (application: Application) => {
+      const windowClass = this.getWindowMatchers(application)[0];
+      if (!windowClass) {
+        return;
       }
-    }
 
-    if (appOpen) {
-      this.logger.log(`Application ${action.application} is already open`);
-
-      // Fire and forget - activate window
       spawnAndForget('sudo', [
         '-u',
         'user',
+        'env',
+        `DISPLAY=${DESKTOP_DISPLAY}`,
         'wmctrl',
         '-x',
         '-a',
-        processMap[action.application],
+        windowClass,
       ]);
 
-      // Fire and forget - maximize window
       spawnAndForget('sudo', [
         '-u',
         'user',
+        'env',
+        `DISPLAY=${DESKTOP_DISPLAY}`,
         'wmctrl',
         '-x',
         '-r',
-        processMap[action.application],
+        windowClass,
         '-b',
         'add,maximized_vert,maximized_horz',
       ]);
+    };
 
+    if (action.application === 'desktop') {
+      spawnAndForget('sudo', [
+        '-u',
+        'user',
+        'env',
+        `DISPLAY=${DESKTOP_DISPLAY}`,
+        'wmctrl',
+        '-k',
+        'on',
+      ]);
       return;
     }
 
-    // application is not open, open it - fire and forget
+    const launchConfig = APPLICATION_LAUNCH_COMMANDS[action.application];
+    if (!launchConfig) {
+      throw new Error(`Unsupported application: ${String(action.application)}`);
+    }
+
+    if (await this.isApplicationOpen(action.application)) {
+      this.logger.log(`Application ${action.application} is already open`);
+      focusWindow(action.application);
+      return;
+    }
+
     spawnAndForget('sudo', [
       '-u',
       'user',
+      'env',
+      `DISPLAY=${DESKTOP_DISPLAY}`,
       'nohup',
-      commandMap[action.application],
+      launchConfig.command,
+      ...(launchConfig.args ?? []),
     ]);
 
-    this.logger.log(`Application ${action.application} launched`);
+    this.logger.log(`Application ${action.application} launching`);
 
-    // Just return immediately
-    return;
+    const windowDetected = await this.waitForApplicationWindow(
+      action.application,
+    );
+
+    if (!windowDetected) {
+      throw new Error(
+        `Timed out waiting for ${action.application} window to appear`,
+      );
+    }
+
+    focusWindow(action.application);
+    this.logger.log(`Application ${action.application} launched and focused`);
   }
 
   private async writeFile(

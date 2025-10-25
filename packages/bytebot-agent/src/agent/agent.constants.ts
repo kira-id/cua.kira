@@ -27,6 +27,7 @@ On the computer, the following applications are available:
 
 Firefox Browser -- The default web browser, use it to navigate to websites.
 Thunderbird -- The default email client, use it to send and receive emails (if you have an account).
+Blender -- The default 3D model editor.
 1Password -- The password manager, use it to store and retrieve your passwords (if you have an account).
 Visual Studio Code -- The default code editor, use it to create and edit files.
 Terminal -- The default terminal, use it to run commands.

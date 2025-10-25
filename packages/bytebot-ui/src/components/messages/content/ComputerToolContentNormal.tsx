@@ -22,6 +22,7 @@ const applicationMap: Record<Application, string> = {
   firefox: "Firefox",
   "1password": "1Password",
   thunderbird: "Thunderbird",
+  blender: "Blender",
   vscode: "Visual Studio Code",
   terminal: "Terminal",
   directory: "File Manager",

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, CheckCircle, Save, TestTube, Shield, Eye, EyeOff } from "lucide-react";
+import { AlertCircle, CheckCircle, Save, TestTube, Shield } from "lucide-react";
 
 interface ApiKeyConfig {
   anthropicApiKey: string;
@@ -65,7 +65,7 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [testStatus, setTestStatus] = useState<Record<string, { type: "success" | "error"; message: string } | null>>({});
-  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+  const isBusy = isSaving || isLoading;
 
   // Fetch API key status from server (which keys are configured)
   useEffect(() => {
@@ -88,6 +88,14 @@ export default function SettingsPage() {
 
   // Helper function to render API key status indicator
   const renderKeyStatus = (keyName: keyof ApiKeyConfig) => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center space-x-1 text-xs text-muted-foreground">
+          <span>Checking...</span>
+        </div>
+      );
+    }
+
     const isConfigured = apiKeyStatus[keyName];
     if (isConfigured) {
       return (
@@ -118,12 +126,13 @@ export default function SettingsPage() {
     
     try {
       // Only send non-empty API keys to backend
-      const keysToSave = Object.entries(apiConfig).reduce((acc, [key, value]) => {
-        if (value.trim()) {
-          (acc as any)[key] = value;
-        }
-        return acc;
-      }, {} as Partial<ApiKeyConfig>);
+      const keysToSave = (Object.entries(apiConfig) as [keyof ApiKeyConfig, string][])
+        .reduce<Partial<ApiKeyConfig>>((acc, [key, value]) => {
+          if (value.trim()) {
+            acc[key] = value;
+          }
+          return acc;
+        }, {});
 
       // Send to backend for secure server-side storage
       const response = await fetch("/api/settings/api-keys", {
@@ -237,6 +246,12 @@ export default function SettingsPage() {
             <p className="text-muted-foreground">Configure your API keys and preferences</p>
           </div>
 
+          {isLoading && (
+            <div className="mb-6 text-sm text-muted-foreground">
+              Checking configured keys...
+            </div>
+          )}
+
           {saveStatus && (
             <div className={`mb-6 p-3 rounded-lg border ${saveStatus.type === "error" ? "border-destructive bg-destructive/10" : "border-green-500/30 bg-green-500/10"}`}>
               <div className="flex items-center gap-2">
@@ -287,7 +302,7 @@ export default function SettingsPage() {
                         type="button"
                         variant="outline"
                         onClick={() => handleTestApiKey("openrouter", apiConfig.openrouterApiKey)}
-                        disabled={isSaving}
+                        disabled={isBusy}
                       >
                         <TestTube className="h-4 w-4 mr-2" />
                         Test
@@ -339,7 +354,7 @@ export default function SettingsPage() {
                         type="button"
                         variant="outline"
                         onClick={() => handleTestApiKey("openai", apiConfig.openaiApiKey)}
-                        disabled={isSaving}
+                        disabled={isBusy}
                       >
                         <TestTube className="h-4 w-4 mr-2" />
                         Test
@@ -390,7 +405,7 @@ export default function SettingsPage() {
                         type="button"
                         variant="outline"
                         onClick={() => handleTestApiKey("anthropic", apiConfig.anthropicApiKey)}
-                        disabled={isSaving}
+                        disabled={isBusy}
                       >
                         <TestTube className="h-4 w-4 mr-2" />
                         Test
@@ -441,7 +456,7 @@ export default function SettingsPage() {
                         type="button"
                         variant="outline"
                         onClick={() => handleTestApiKey("gemini", apiConfig.geminiApiKey)}
-                        disabled={isSaving}
+                        disabled={isBusy}
                       >
                         <TestTube className="h-4 w-4 mr-2" />
                         Test
@@ -490,7 +505,7 @@ export default function SettingsPage() {
                         type="button"
                         variant="outline"
                         onClick={() => handleTestApiKey("mistral", apiConfig.mistralApiKey)}
-                        disabled={isSaving}
+                        disabled={isBusy}
                       >
                         <TestTube className="h-4 w-4 mr-2" />
                         Test
@@ -539,7 +554,7 @@ export default function SettingsPage() {
                         type="button"
                         variant="outline"
                         onClick={() => handleTestApiKey("cohere", apiConfig.cohereApiKey)}
-                        disabled={isSaving}
+                        disabled={isBusy}
                       >
                         <TestTube className="h-4 w-4 mr-2" />
                         Test
@@ -588,7 +603,7 @@ export default function SettingsPage() {
                         type="button"
                         variant="outline"
                         onClick={() => handleTestApiKey("groq", apiConfig.groqApiKey)}
-                        disabled={isSaving}
+                        disabled={isBusy}
                       >
                         <TestTube className="h-4 w-4 mr-2" />
                         Test
@@ -637,7 +652,7 @@ export default function SettingsPage() {
                         type="button"
                         variant="outline"
                         onClick={() => handleTestApiKey("perplexity", apiConfig.perplexityApiKey)}
-                        disabled={isSaving}
+                        disabled={isBusy}
                       >
                         <TestTube className="h-4 w-4 mr-2" />
                         Test
@@ -686,7 +701,7 @@ export default function SettingsPage() {
                         type="button"
                         variant="outline"
                         onClick={() => handleTestApiKey("together", apiConfig.togetherApiKey)}
-                        disabled={isSaving}
+                        disabled={isBusy}
                       >
                         <TestTube className="h-4 w-4 mr-2" />
                         Test
@@ -735,7 +750,7 @@ export default function SettingsPage() {
                         type="button"
                         variant="outline"
                         onClick={() => handleTestApiKey("deepseek", apiConfig.deepseekApiKey)}
-                        disabled={isSaving}
+                        disabled={isBusy}
                       >
                         <TestTube className="h-4 w-4 mr-2" />
                         Test
@@ -784,7 +799,7 @@ export default function SettingsPage() {
                         type="button"
                         variant="outline"
                         onClick={() => handleTestApiKey("fireworks", apiConfig.fireworksApiKey)}
-                        disabled={isSaving}
+                        disabled={isBusy}
                       >
                         <TestTube className="h-4 w-4 mr-2" />
                         Test
@@ -818,7 +833,7 @@ export default function SettingsPage() {
               </Tabs>
 
               <div className="mt-6 flex justify-end">
-                <Button onClick={handleSave} disabled={isSaving}>
+                <Button onClick={handleSave} disabled={isBusy}>
                   <Save className="h-4 w-4 mr-2" />
                   {isSaving ? "Saving..." : "Save Configuration"}
                 </Button>

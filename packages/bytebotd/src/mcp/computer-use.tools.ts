@@ -512,6 +512,7 @@ V, W, X, Y, Z
         'firefox',
         '1password',
         'thunderbird',
+        'blender',
         'vscode',
         'terminal',
         'desktop',
@@ -526,6 +527,7 @@ V, W, X, Y, Z
       | 'firefox'
       | '1password'
       | 'thunderbird'
+      | 'blender'
       | 'vscode'
       | 'terminal'
       | 'desktop'

@@ -141,6 +141,13 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Install Blender via direct download (avoids PPA dependency issues)
+RUN curl -L https://download.blender.org/release/Blender4.3/blender-4.3.0-linux-x64.tar.xz -o blender.tar.xz && \
+    tar -xf blender.tar.xz && \
+    mv blender-4.3.0-linux-x64 /opt/blender && \
+    rm blender.tar.xz && \
+    ln -s /opt/blender/blender /usr/bin/blender
+
 # Upgrade pip
 RUN pip3 install --upgrade pip
 
@@ -234,6 +241,23 @@ RUN mkdir -p /home/user/Desktop && \
     cp -f /usr/share/applications/terminal.desktop /home/user/Desktop/ && \
     chmod +x /home/user/Desktop/*.desktop && \
     chown user:user /home/user/Desktop/*.desktop
+
+# Create Blender desktop shortcut
+RUN mkdir -p /usr/share/applications && \
+    echo '[Desktop Entry]' > /usr/share/applications/blender.desktop && \
+    echo 'Version=1.0' >> /usr/share/applications/blender.desktop && \
+    echo 'Type=Application' >> /usr/share/applications/blender.desktop && \
+    echo 'Name=Blender' >> /usr/share/applications/blender.desktop && \
+    echo 'Comment=3D creation suite' >> /usr/share/applications/blender.desktop && \
+    echo 'Exec=/usr/bin/blender %f' >> /usr/share/applications/blender.desktop && \
+    echo 'Icon=blender' >> /usr/share/applications/blender.desktop && \
+    echo 'Terminal=false' >> /usr/share/applications/blender.desktop && \
+    echo 'Categories=Graphics;3DGraphics;' >> /usr/share/applications/blender.desktop
+
+# Copy Blender shortcut to user's Desktop
+RUN cp /usr/share/applications/blender.desktop /home/user/Desktop/ && \
+    chmod +x /home/user/Desktop/blender.desktop && \
+    chown user:user /home/user/Desktop/blender.desktop
 
 RUN mkdir -p /home/user/.config /home/user/.local/share /home/user/.cache \
     && chown -R user:user /home/user/.config /home/user/.local /home/user/.cache

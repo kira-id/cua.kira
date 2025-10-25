@@ -1,24 +1,49 @@
-import { NextRequest } from "next/server";
-
 // Configuration constants
 const API_REQUEST_TIMEOUT_MS = 5000; // 5 seconds timeout
 
 // Helper function to safely log errors without sensitive data
-function logSafeError(message: string, error: any) {
-  const safeErrorInfo = {
-    message: message,
-    errorType: error?.constructor?.name || 'Unknown',
-    errorCode: error?.code,
-    statusCode: error?.status,
-    // Only log stack trace in development
-    ...(process.env.NODE_ENV === 'development' && { stack: error?.stack })
-  };
-  
-  console.error(safeErrorInfo);
+type ErrorMetadata = {
+  code?: string | number;
+  status?: number;
+  stack?: string;
+};
+
+function logSafeError(message: string, error: unknown) {
+  if (error instanceof Error) {
+    const metadata = error as Error & ErrorMetadata;
+    console.error({
+      message,
+      errorType: error.constructor.name,
+      errorCode: metadata.code,
+      statusCode: metadata.status,
+      ...(process.env.NODE_ENV === "development" && metadata.stack
+        ? { stack: metadata.stack }
+        : {}),
+    });
+    return;
+  }
+
+  if (typeof error === "object" && error !== null) {
+    const metadata = error as ErrorMetadata & { constructor?: { name?: string } };
+    console.error({
+      message,
+      errorType: metadata.constructor?.name ?? "Unknown",
+      errorCode: metadata.code,
+      statusCode: metadata.status,
+      details: metadata,
+    });
+    return;
+  }
+
+  console.error({
+    message,
+    errorType: typeof error,
+    value: error,
+  });
 }
 
 // API endpoint to get API key status (which keys are configured)
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     // Forward the request to the backend agent API
     const BYTEBOT_AGENT_BASE_URL = process.env.BYTEBOT_AGENT_BASE_URL || "http://localhost:3001";
@@ -67,7 +92,7 @@ export async function GET(req: NextRequest) {
     }
     
     // Handle response parsing safely
-    let result;
+    let result: unknown;
     const contentType = response.headers.get('content-type');
     
     // Read response body as text first to avoid consuming the stream

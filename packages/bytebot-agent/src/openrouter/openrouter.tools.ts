@@ -75,7 +75,7 @@ export const openrouterTools = [
           application: {
             type: 'string',
             description: 'Application to open/switch to',
-            enum: ['firefox', 'thunderbird', '1password', 'vscode', 'terminal', 'directory', 'desktop'],
+            enum: ['firefox', 'thunderbird', 'blender', '1password', 'vscode', 'terminal', 'directory', 'desktop'],
           },
         },
         required: ['application'],

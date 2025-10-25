@@ -296,6 +296,7 @@ export const _applicationTool = {
           'firefox',
           '1password',
           'thunderbird',
+          'blender',
           'vscode',
           'terminal',
           'desktop',

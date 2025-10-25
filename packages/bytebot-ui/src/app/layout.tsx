@@ -6,8 +6,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Bytebot",
-  description: "Bytebot is the container for desktop agents.",
+  title: "CUA.Kira",
+  description: "CUA.Kira is AI for desktop agents",
 };
 
 export default function RootLayout({

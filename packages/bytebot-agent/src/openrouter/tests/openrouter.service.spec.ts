@@ -52,7 +52,7 @@ describe('OpenRouterService', () => {
       expect(fetch).toHaveBeenCalledWith('https://openrouter.ai/api/v1/models', {
         headers: {
           Authorization: 'Bearer test-api-key',
-          'HTTP-Referer': 'https://bytebot.ai',
+          'HTTP-Referer': 'https://kira.id',
           'X-Title': 'Bytebot Agent',
         },
       });
@@ -187,6 +187,147 @@ describe('OpenRouterService', () => {
           true,
         ),
       ).rejects.toThrow('BytebotAgentInterrupt');
+    });
+
+    it('should handle structured content responses with tool use', async () => {
+      const mockResponse = {
+        choices: [
+          {
+            message: {
+              content: [
+                {
+                  type: 'output_text',
+                  text: 'Executing wait tool',
+                },
+                {
+                  type: 'tool_use',
+                  id: 'call_123',
+                  name: 'computer_wait',
+                  input: {
+                    duration: 500,
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        usage: {
+          prompt_tokens: 5,
+          completion_tokens: 3,
+          total_tokens: 8,
+        },
+      };
+
+      (fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockResponse),
+      });
+
+      const result = await service.generateMessage(
+        'You are a helpful assistant',
+        [mockMessage],
+        'anthropic/claude-3.5-sonnet',
+        true,
+      );
+
+      expect(result.contentBlocks).toHaveLength(2);
+      expect(result.contentBlocks[0]).toEqual({
+        type: MessageContentType.Text,
+        text: 'Executing wait tool',
+      });
+      expect(result.contentBlocks[1]).toEqual({
+        type: MessageContentType.ToolUse,
+        id: 'call_123',
+        name: 'computer_wait',
+        input: { duration: 500 },
+      });
+    });
+
+    it('should handle zero completion tokens with tool calls', async () => {
+      const mockResponse = {
+        choices: [
+          {
+            message: {
+              tool_calls: [
+                {
+                  id: 'call_123',
+                  type: 'function',
+                  function: {
+                    name: 'computer_wait',
+                    arguments: '{"duration":500}',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        usage: {
+          prompt_tokens: 5,
+          completion_tokens: 0,
+          total_tokens: 5,
+        },
+      };
+
+      (fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockResponse),
+      });
+
+      const result = await service.generateMessage(
+        'You are a helpful assistant',
+        [mockMessage],
+        'anthropic/claude-3.5-sonnet',
+        true,
+      );
+
+      expect(result.contentBlocks).toHaveLength(1);
+      expect(result.contentBlocks[0]).toEqual({
+        type: MessageContentType.ToolUse,
+        id: 'call_123',
+        name: 'computer_wait',
+        input: { duration: 500 },
+      });
+      expect(result.tokenUsage).toEqual({
+        inputTokens: 5,
+        outputTokens: 0,
+        totalTokens: 5,
+      });
+    });
+
+    it('should handle zero completion tokens with empty response', async () => {
+      const mockResponse = {
+        choices: [
+          {
+            message: {
+              content: '',
+            },
+          },
+        ],
+        usage: {
+          prompt_tokens: 5,
+          completion_tokens: 0,
+          total_tokens: 5,
+        },
+      };
+
+      (fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockResponse),
+      });
+
+      const result = await service.generateMessage(
+        'You are a helpful assistant',
+        [mockMessage],
+        'anthropic/claude-3.5-sonnet',
+        true,
+      );
+
+      expect(result.contentBlocks).toEqual([]);
+      expect(result.tokenUsage).toEqual({
+        inputTokens: 5,
+        outputTokens: 0,
+        totalTokens: 5,
+      });
     });
   });
 

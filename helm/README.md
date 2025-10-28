@@ -5,7 +5,7 @@ This directory contains Helm charts for deploying Bytebot on Kubernetes.
 ## Documentation
 
 For complete deployment instructions, see:
-**[Helm Deployment Guide](https://docs.bytebot.ai/deployment/helm)**
+**[Helm Deployment Guide](https://docs.kira.id/deployment/helm)**
 
 ## Quick Start
 

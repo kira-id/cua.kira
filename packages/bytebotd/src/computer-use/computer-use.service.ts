@@ -4,6 +4,8 @@ import { promisify } from 'util';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { NutService } from '../nut/nut.service';
+import { SCREENSHOT_CONFIG } from '../config/screenshot.config';
+import { Base64ImageCompressor } from '../mcp/compressor';
 import {
   ComputerAction,
   MoveMouseAction,
@@ -20,6 +22,7 @@ import {
   PasteTextAction,
   WriteFileAction,
   ReadFileAction,
+  ImageMediaType,
 } from '@bytebot/shared';
 
 const execAsync = promisify(exec);
@@ -288,10 +291,42 @@ export class ComputerUseService {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  async screenshot(): Promise<{ image: string }> {
+  async screenshot(): Promise<{ image: string; mediaType: ImageMediaType }> {
     this.logger.log(`Taking screenshot`);
     const buffer = await this.nutService.screendump();
-    return { image: `${buffer.toString('base64')}` };
+    const base64Image = buffer.toString('base64');
+
+    if (!SCREENSHOT_CONFIG.compressionEnabled) {
+      return { image: base64Image, mediaType: SCREENSHOT_CONFIG.mediaType };
+    }
+
+    try {
+      const compressed = await Base64ImageCompressor.compressWithResize(
+        base64Image,
+        {
+          targetSizeKB: SCREENSHOT_CONFIG.targetSizeKB,
+          initialQuality: SCREENSHOT_CONFIG.initialQuality,
+          minQuality: SCREENSHOT_CONFIG.minQuality,
+          maxWidth: SCREENSHOT_CONFIG.maxWidth,
+          maxHeight: SCREENSHOT_CONFIG.maxHeight,
+          format: SCREENSHOT_CONFIG.format,
+        },
+      );
+
+      this.logger.debug(
+        `Screenshot compressed to ${compressed.sizeKB.toFixed(1)}KB`,
+      );
+
+      return {
+        image: compressed.base64,
+        mediaType: SCREENSHOT_CONFIG.mediaType,
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown compression error';
+      this.logger.warn(`Screenshot compression failed: ${message}`);
+      return { image: base64Image, mediaType: SCREENSHOT_CONFIG.mediaType };
+    }
   }
 
   private async cursor_position(): Promise<{ x: number; y: number }> {

@@ -8,11 +8,24 @@ interface MessageGroupProps {
   group: GroupedMessages;
   taskStatus: TaskStatus;
   messageIdToIndex: Record<string, number>;
+  onScreenshotSelect?: (screenshotId: string) => void;
 }
 
-export function MessageGroup({ group, taskStatus, messageIdToIndex }: MessageGroupProps) {
+export function MessageGroup({
+  group,
+  taskStatus,
+  messageIdToIndex,
+  onScreenshotSelect,
+}: MessageGroupProps) {
   if (group.role === Role.ASSISTANT) {
-    return <AssistantMessage group={group} taskStatus={taskStatus} messageIdToIndex={messageIdToIndex} />;
+    return (
+      <AssistantMessage
+        group={group}
+        taskStatus={taskStatus}
+        messageIdToIndex={messageIdToIndex}
+        onScreenshotSelect={onScreenshotSelect}
+      />
+    );
   }
 
   return <UserMessage group={group} messageIdToIndex={messageIdToIndex} />;

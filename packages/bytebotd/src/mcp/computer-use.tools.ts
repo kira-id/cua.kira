@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { Tool } from '@rekog/mcp-nest';
 import { z } from 'zod';
 import { ComputerUseService } from '../computer-use/computer-use.service';
-import { compressPngBase64Under1MB } from './compressor';
 
 @Injectable()
 export class ComputerUseTools {
@@ -556,13 +555,15 @@ V, W, X, Y, Z
     try {
       const shot = (await this.computerUse.action({
         action: 'screenshot',
-      })) as { image: string };
+      })) as { image: string; mediaType?: string };
+      const mimeType =
+        typeof shot.mediaType === 'string' ? shot.mediaType : 'image/png';
       return {
         content: [
           {
             type: 'image',
-            data: await compressPngBase64Under1MB(shot.image),
-            mimeType: 'image/png',
+            data: shot.image,
+            mimeType,
           },
         ],
       };

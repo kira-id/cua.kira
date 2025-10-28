@@ -29,6 +29,13 @@ import {
 export class ProxyService implements BytebotAgentService {
   private readonly openai: OpenAI;
   private readonly logger = new Logger(ProxyService.name);
+  private readonly toolNames = new Set(
+    proxyTools
+      .map((tool) =>
+        tool.type === 'function' ? tool.function.name : undefined,
+      )
+      .filter((name): name is string => Boolean(name)),
+  );
 
   constructor(private readonly configService: ConfigService) {
     const proxyUrl = this.configService.get<string>('BYTEBOT_LLM_PROXY_URL');
@@ -146,18 +153,9 @@ export class ProxyService implements BytebotAgentService {
               )}`,
             });
           } else if (isImageContentBlock(block)) {
-            chatMessages.push({
-              role: 'user',
-              content: [
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:${block.source.media_type};base64,${block.source.data}`,
-                    detail: 'high',
-                  },
-                },
-              ],
-            });
+            chatMessages.push(
+              this.createImageMessage('user', block as ImageContentBlock),
+            );
           }
         }
       } else {
@@ -172,31 +170,21 @@ export class ProxyService implements BytebotAgentService {
             }
             case MessageContentType.Image: {
               const imageBlock = block as ImageContentBlock;
-              chatMessages.push({
-                role: 'user',
-                content: [
-                  {
-                    type: 'image_url',
-                    image_url: {
-                      url: `data:${imageBlock.source.media_type};base64,${imageBlock.source.data}`,
-                      detail: 'high',
-                    },
-                  },
-                ],
-              });
+              chatMessages.push(this.createImageMessage('user', imageBlock));
               break;
             }
             case MessageContentType.ToolUse: {
               const toolBlock = block as ToolUseContentBlock;
               chatMessages.push({
                 role: 'assistant',
+                content: '',
                 tool_calls: [
                   {
                     id: toolBlock.id,
                     type: 'function',
                     function: {
                       name: toolBlock.name,
-                      arguments: JSON.stringify(toolBlock.input),
+                      arguments: JSON.stringify(toolBlock.input ?? {}),
                     },
                   },
                 ],
@@ -215,46 +203,25 @@ export class ProxyService implements BytebotAgentService {
             }
             case MessageContentType.ToolResult: {
               const toolResultBlock = block as ToolResultContentBlock;
+              const textOutputs = toolResultBlock.content
+                .filter((content) => content.type === MessageContentType.Text)
+                .map((content) => (content as TextContentBlock).text)
+                .filter((text) => text.trim().length > 0);
+              const imageContents = toolResultBlock.content.filter(
+                (content) => content.type === MessageContentType.Image,
+              ) as ImageContentBlock[];
 
-              if (
-                toolResultBlock.content.every(
-                  (content) => content.type === MessageContentType.Image,
-                )
-              ) {
-                chatMessages.push({
-                  role: 'tool',
-                  tool_call_id: toolResultBlock.tool_use_id,
-                  content: 'screenshot',
-                });
-              }
+              const toolContent = textOutputs.join('\n').trim();
+              chatMessages.push({
+                role: 'tool',
+                tool_call_id: toolResultBlock.tool_use_id,
+                content: toolContent.length > 0 ? toolContent : ' ',
+              });
 
-              toolResultBlock.content.forEach((content) => {
-                if (content.type === MessageContentType.Text) {
-                  chatMessages.push({
-                    role: 'tool',
-                    tool_call_id: toolResultBlock.tool_use_id,
-                    content: content.text,
-                  });
-                }
-
-                if (content.type === MessageContentType.Image) {
-                  chatMessages.push({
-                    role: 'user',
-                    content: [
-                      {
-                        type: 'text',
-                        text: 'Screenshot',
-                      },
-                      {
-                        type: 'image_url',
-                        image_url: {
-                          url: `data:${content.source.media_type};base64,${content.source.data}`,
-                          detail: 'high',
-                        },
-                      },
-                    ],
-                  });
-                }
+              imageContents.forEach((imageContent) => {
+                chatMessages.push(
+                  this.createImageMessage('user', imageContent),
+                );
               });
               break;
             }
@@ -273,13 +240,87 @@ export class ProxyService implements BytebotAgentService {
     message: OpenAI.Chat.ChatCompletionMessage,
   ): MessageContentBlock[] {
     const contentBlocks: MessageContentBlock[] = [];
+    const parsedToolCallIds = new Set<string>();
 
-    // Handle text content
-    if (message.content) {
-      contentBlocks.push({
-        type: MessageContentType.Text,
-        text: message.content,
-      } as TextContentBlock);
+    if (Array.isArray(message.content)) {
+      const textParts: string[] = [];
+
+      message.content.forEach((part) => {
+        const candidate = part as ChatCompletionContentPart & {
+          text?: string;
+          id?: string;
+          name?: string;
+          input?: unknown;
+          arguments?: unknown;
+          type?: string;
+        };
+
+        if (
+          candidate &&
+          typeof candidate.text === 'string' &&
+          candidate.text.trim().length > 0
+        ) {
+          textParts.push(candidate.text.trim());
+        }
+
+        if (
+          candidate &&
+          'id' in candidate && 'name' in candidate
+        ) {
+          const toolId =
+            (candidate as any).id ||
+            `proxy-inline-tool-${parsedToolCallIds.size + contentBlocks.length + 1}`;
+          const toolInput = this.parseToolInput(
+            (candidate as any).input ?? (candidate as any).arguments,
+          );
+          if (typeof (candidate as any).name === 'string' && (candidate as any).name.length > 0) {
+            contentBlocks.push({
+              type: MessageContentType.ToolUse,
+              id: toolId,
+              name: (candidate as any).name,
+              input: toolInput,
+            } as ToolUseContentBlock);
+            parsedToolCallIds.add(toolId);
+          }
+        } else if (
+          candidate &&
+          candidate.type === 'text' &&
+          typeof candidate.text === 'string' &&
+          candidate.text.trim().length > 0
+        ) {
+          textParts.push(candidate.text.trim());
+        }
+      });
+
+      if (textParts.length > 0) {
+        contentBlocks.push({
+          type: MessageContentType.Text,
+          text: textParts.join('\n'),
+        } as TextContentBlock);
+      }
+    } else if (
+      typeof message.content === 'string' &&
+      message.content.trim().length > 0
+    ) {
+      let remainingText = message.content;
+
+      if (!message.tool_calls || message.tool_calls.length === 0) {
+        const inlineToolResult = this.extractInlineToolCalls(
+          remainingText,
+          parsedToolCallIds,
+        );
+        remainingText = inlineToolResult.remainingText;
+        inlineToolResult.toolBlocks.forEach((block) => {
+          contentBlocks.push(block);
+        });
+      }
+
+      if (remainingText.trim().length > 0) {
+        contentBlocks.push({
+          type: MessageContentType.Text,
+          text: remainingText.trim(),
+        } as TextContentBlock);
+      }
     }
 
     if (message['reasoning_content']) {
@@ -294,6 +335,9 @@ export class ProxyService implements BytebotAgentService {
     if (message.tool_calls && message.tool_calls.length > 0) {
       for (const toolCall of message.tool_calls) {
         if (toolCall.type === 'function') {
+          if (parsedToolCallIds.has(toolCall.id)) {
+            continue;
+          }
           let parsedInput = {};
           try {
             parsedInput = JSON.parse(toolCall.function.arguments || '{}');
@@ -310,6 +354,7 @@ export class ProxyService implements BytebotAgentService {
             name: toolCall.function.name,
             input: parsedInput,
           } as ToolUseContentBlock);
+          parsedToolCallIds.add(toolCall.id);
         }
       }
     }
@@ -323,5 +368,141 @@ export class ProxyService implements BytebotAgentService {
     }
 
     return contentBlocks;
+  }
+
+  private parseToolInput(rawInput: unknown): Record<string, unknown> {
+    if (!rawInput) {
+      return {};
+    }
+
+    if (typeof rawInput === 'string') {
+      try {
+        return JSON.parse(rawInput);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to parse tool input from string: ${rawInput}`,
+        );
+        return {};
+      }
+    }
+
+    if (typeof rawInput === 'object') {
+      return rawInput as Record<string, unknown>;
+    }
+
+    return {};
+  }
+
+  private createImageMessage(
+    role: 'user' | 'assistant',
+    image: ImageContentBlock,
+  ): ChatCompletionMessageParam {
+    return {
+      role: role === 'user' ? 'user' : 'assistant',
+      content: [
+        {
+          type: 'image_url',
+          image_url: {
+            url: `data:${image.source.media_type};base64,${image.source.data}`,
+            detail: 'high',
+          },
+        },
+      ],
+    } as ChatCompletionMessageParam;
+  }
+
+  private extractInlineToolCalls(
+    text: string,
+    parsedToolCallIds: Set<string>,
+  ): { remainingText: string; toolBlocks: ToolUseContentBlock[] } {
+    let remaining = text;
+    const toolBlocks: ToolUseContentBlock[] = [];
+
+    for (const toolName of this.toolNames) {
+      let searchIndex = 0;
+
+      while (searchIndex < remaining.length) {
+        const invocationIndex = remaining.indexOf(`${toolName}(`, searchIndex);
+        if (invocationIndex === -1) {
+          break;
+        }
+
+        const argsStart = remaining.indexOf('{', invocationIndex);
+        if (argsStart === -1) {
+          searchIndex = invocationIndex + toolName.length;
+          continue;
+        }
+
+        const argsEnd = this.findMatchingClosingBrace(remaining, argsStart);
+        if (argsEnd === -1) {
+          searchIndex = invocationIndex + toolName.length;
+          continue;
+        }
+
+        const closingParenIndex = remaining.indexOf(')', argsEnd);
+        if (closingParenIndex === -1) {
+          searchIndex = invocationIndex + toolName.length;
+          continue;
+        }
+
+        const rawArguments = remaining.slice(argsStart, argsEnd + 1);
+        const parsedArguments = this.tryParseJson(rawArguments);
+
+        if (!parsedArguments) {
+          searchIndex = invocationIndex + toolName.length;
+          continue;
+        }
+
+        const toolId = `inline-tool-${parsedToolCallIds.size + toolBlocks.length + 1}`;
+        toolBlocks.push({
+          type: MessageContentType.ToolUse,
+          id: toolId,
+          name: toolName,
+          input: parsedArguments,
+        } as ToolUseContentBlock);
+        parsedToolCallIds.add(toolId);
+
+        remaining =
+          remaining.slice(0, invocationIndex) +
+          remaining.slice(closingParenIndex + 1);
+        searchIndex = invocationIndex;
+      }
+    }
+
+    return {
+      remainingText: remaining.trim(),
+      toolBlocks,
+    };
+  }
+
+  private findMatchingClosingBrace(text: string, startIndex: number): number {
+    let depth = 0;
+
+    for (let i = startIndex; i < text.length; i++) {
+      const char = text[i];
+
+      if (char === '{') {
+        depth++;
+      } else if (char === '}') {
+        depth--;
+
+        if (depth === 0) {
+          return i;
+        }
+      }
+    }
+
+    return -1;
+  }
+
+  private tryParseJson(raw: string): Record<string, unknown> | null {
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      this.logger.debug(
+        `Failed to parse inline tool call arguments: ${raw}. ${(error as Error).message}`,
+      );
+      return null;
+    }
   }
 }

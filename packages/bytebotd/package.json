@@ -1,12 +1,12 @@
 {
   "name": "bytebotd",
   "version": "0.0.1",
-  "email": "support@bytebot.ai",
+  "email": "support@kira.id",
   "description": "Bytebot daemon",
-  "homepage": "https://bytebot.ai",
+  "homepage": "https://kira.id",
   "author": {
-    "name": "Bytebot",
-    "email": "support@bytebot.ai"
+    "name": "Kira.id Team",
+    "email": "support@kira.id"
   },
   "private": true,
   "license": "UNLICENSED",

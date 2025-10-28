@@ -6,7 +6,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Injectable, Logger } from '@nestjs/common';
-import { ComputerAction } from '@bytebot/shared';
+import { ComputerAction, ImageMediaType } from '@bytebot/shared';
 
 @Injectable()
 @WebSocketGateway({
@@ -36,7 +36,7 @@ export class InputTrackingGateway
   }
 
   emitScreenshotAndAction(
-    screenshot: { image: string },
+    screenshot: { image: string; mediaType: ImageMediaType },
     action: ComputerAction,
   ) {
     this.server.emit('screenshotAndAction', screenshot, action);

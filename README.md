@@ -1,8 +1,10 @@
 <div align="center">
 
-<img src="docs/images/bytebot-logo.png" width="500" alt="Bytebot Logo">
+<img src="docs/images/bytebot-logo.png" width="500" alt="CUA.kira Logo">
 
-# Bytebot: Open-Source AI Desktop Agent
+# CUA.kira: Open-Source AI Desktop Agent
+
+> CUA.kira is an actively maintained fork of [Bytebot](https://github.com/bytebot-ai/bytebot). Until dedicated docs ship, many setup links still point to the upstream project.
 
 <a href="https://trendshift.io/repositories/14624" target="_blank"><img src="https://trendshift.io/api/badge/repositories/14624" alt="bytebot-ai%2Fbytebot | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
@@ -14,7 +16,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Discord](https://img.shields.io/discord/1232768900274585720?color=7289da&label=discord)](https://discord.com/invite/d9ewZkWPTP)
 
-[🌐 Website](https://bytebot.ai) • [📚 Documentation](https://docs.bytebot.ai) • [💬 Discord](https://discord.com/invite/d9ewZkWPTP) • [𝕏 Twitter](https://x.com/bytebot_ai)
+[🌐 Website](https://kira.id) • [📚 Documentation](https://docs.kira.id) • [💬 Discord](https://discord.com/invite/d9ewZkWPTP) • [𝕏 Twitter](https://x.com/bytebot_ai)
 
 <!-- Keep these links. Translations will automatically update with the README. -->
 [Deutsch](https://zdoc.app/de/bytebot-ai/bytebot) | 
@@ -35,7 +37,7 @@ https://github.com/user-attachments/assets/72a43cf2-bd87-44c5-a582-e7cbe176f37f
 
 ## What is a Desktop Agent?
 
-A desktop agent is an AI that has its own computer. Unlike browser-only agents or traditional RPA tools, Bytebot comes with a full virtual desktop where it can:
+A desktop agent is an AI that has its own computer. Unlike browser-only agents or traditional RPA tools, CUA.kira comes with a full virtual desktop where it can:
 
 - Use any application (browsers, email clients, office tools, IDEs)
 - Download and organize files with its own file system
@@ -51,7 +53,7 @@ When AI has access to a complete desktop environment, it unlocks capabilities th
 
 ### Complete Task Autonomy
 
-Give Bytebot a task like "Download all invoices from our vendor portals and organize them into a folder" and it will:
+Give CUA.kira a task like "Download all invoices from our vendor portals and organize them into a folder" and it will:
 
 - Open the browser
 - Navigate to each portal
@@ -61,7 +63,7 @@ Give Bytebot a task like "Download all invoices from our vendor portals and orga
 
 ### Process Documents
 
-Upload files directly to Bytebot's desktop and it can:
+Upload files directly to CUA.kira's desktop and it can:
 
 - Read entire PDFs into its context
 - Extract data from complex documents
@@ -71,7 +73,7 @@ Upload files directly to Bytebot's desktop and it can:
 
 ### Use Real Applications
 
-Bytebot isn't limited to web interfaces. It can:
+CUA.kira isn't limited to web interfaces. It can:
 
 - Use desktop applications like text editors, VS Code, or email clients
 - Run scripts and command-line tools
@@ -90,8 +92,8 @@ Just click and add your AI provider API key.
 **Option 2: Docker Compose**
 
 ```bash
-git clone https://github.com/bytebot-ai/bytebot.git
-cd bytebot
+git clone https://github.com/kira-id/cua.kira.git
+cd cua.kira
 
 # Add your AI provider key (choose one)
 echo "ANTHROPIC_API_KEY=sk-ant-..." > docker/.env
@@ -103,22 +105,22 @@ docker-compose -f docker/docker-compose.yml up -d
 # Open http://localhost:9992
 ```
 
-[Full deployment guide →](https://docs.bytebot.ai/quickstart)
+[Full deployment guide →](https://docs.kira.id/quickstart)
 
 ## How It Works
 
-Bytebot consists of four integrated components:
+CUA.kira consists of four integrated components:
 
 1. **Virtual Desktop**: A complete Ubuntu Linux environment with pre-installed applications
 2. **AI Agent**: Understands your tasks and controls the desktop to complete them
-3. **Task Interface**: Web UI where you create tasks and watch Bytebot work
+3. **Task Interface**: Web UI where you create tasks and watch CUA.kira work
 4. **APIs**: REST endpoints for programmatic task creation and desktop control
 
 ### Key Features
 
 - **Natural Language Tasks**: Just describe what you need done
-- **File Uploads**: Drop files onto tasks for Bytebot to process
-- **Live Desktop View**: Watch Bytebot work in real-time
+- **File Uploads**: Drop files onto tasks for CUA.kira to process
+- **Live Desktop View**: Watch CUA.kira work in real-time
 - **Takeover Mode**: Take control when you need to help or configure something
 - **Password Manager Support**: Install 1Password, Bitwarden, etc. for automatic authentication
 - **Persistent Environment**: Install programs and they stay available for future tasks
@@ -183,13 +185,13 @@ curl -X POST http://localhost:9990/computer-use \
   -d '{"action": "click_mouse", "coordinate": [500, 300]}'
 ```
 
-[Full API documentation →](https://docs.bytebot.ai/api-reference/introduction)
+[Full API documentation →](https://docs.kira.id/api-reference/introduction)
 
 ## Setting Up Your Desktop Agent
 
-### 1. Deploy Bytebot
+### 1. Deploy CUA.kira
 
-Use one of the deployment methods above to get Bytebot running.
+Use one of the deployment methods above to get CUA.kira running.
 
 ### 2. Configure the Desktop
 
@@ -198,11 +200,11 @@ Use the Desktop tab in the UI to:
 - Install additional programs you need
 - Set up password managers for authentication
 - Configure applications with your preferences
-- Log into websites you want Bytebot to access
+- Log into websites you want CUA.kira to access
 
 ### 3. Start Giving Tasks
 
-Create tasks in natural language and watch Bytebot complete them using the configured desktop.
+Create tasks in natural language and watch CUA.kira complete them using the configured desktop.
 
 ## Use Cases
 
@@ -229,7 +231,7 @@ Create tasks in natural language and watch Bytebot complete them using the confi
 
 ## Architecture
 
-Bytebot is built with:
+CUA.kira is built with:
 
 - **Desktop**: Ubuntu 22.04 with XFCE, Firefox, VS Code, and other tools
 - **Agent**: NestJS service that coordinates AI and desktop actions
@@ -248,7 +250,7 @@ Bytebot is built with:
 
 ### Multiple AI Providers
 
-Use any AI provider through our [LiteLLM integration](https://docs.bytebot.ai/deployment/litellm):
+Use any AI provider through our [LiteLLM integration](https://docs.kira.id/deployment/litellm):
 
 - Azure OpenAI
 - AWS Bedrock
@@ -261,20 +263,20 @@ Deploy on Kubernetes with Helm:
 
 ```bash
 # Clone the repository
-git clone https://github.com/bytebot-ai/bytebot.git
-cd bytebot
+git clone https://github.com/kira-id/cua.kira.git
+cd cua.kira
 
 # Install with Helm
-helm install bytebot ./helm \
+helm install cua-kira ./helm \
   --set agent.env.ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-[Enterprise deployment guide →](https://docs.bytebot.ai/deployment/helm)
+[Enterprise deployment guide →](https://docs.kira.id/deployment/helm)
 
 ## Community & Support
 
 - **Discord**: [Join our community](https://discord.com/invite/d9ewZkWPTP) for help and discussions
-- **Documentation**: Comprehensive guides at [docs.bytebot.ai](https://docs.bytebot.ai)
+- **Documentation**: Comprehensive guides at [docs.kira.id](https://docs.kira.id)
 - **GitHub Issues**: Report bugs and request features
 
 ## Contributing
@@ -288,14 +290,14 @@ We welcome contributions! Whether it's:
 
 Please:
 
-1. Check existing [issues](https://github.com/bytebot-ai/bytebot/issues) first
+1. Check existing [issues](https://github.com/kira-id/cua.kira/issues) first
 2. Open an issue to discuss major changes
 3. Submit PRs with clear descriptions
 4. Join our [Discord](https://discord.com/invite/d9ewZkWPTP) to discuss ideas
 
 ## License
 
-Bytebot is open source under the Apache 2.0 license.
+CUA.kira is open source under the Apache 2.0 license.
 
 ---
 

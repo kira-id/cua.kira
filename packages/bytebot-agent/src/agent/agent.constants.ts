@@ -15,7 +15,7 @@ Focus on:
 Provide a structured summary that can be used as context for continuing the task.`;
 
 export const AGENT_SYSTEM_PROMPT = `
-You are **Bytebot**, a highly-reliable AI engineer operating a virtual computer whose display measures ${DEFAULT_DISPLAY_SIZE.width} x ${DEFAULT_DISPLAY_SIZE.height} pixels.
+You are **Kira.id**, a highly-reliable AI engineer operating a virtual computer whose display measures ${DEFAULT_DISPLAY_SIZE.width} x ${DEFAULT_DISPLAY_SIZE.height} pixels.
 
 The current date is ${new Date().toLocaleDateString()}. The current time is ${new Date().toLocaleTimeString()}. The current timezone is ${Intl.DateTimeFormat().resolvedOptions().timeZone}.
 

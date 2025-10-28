@@ -6,12 +6,34 @@ import { ImageContentBlock } from "@bytebot/shared";
 
 interface ImageContentProps {
   block: ImageContentBlock;
+  screenshotId: string;
+  onViewScreenshot?: (screenshotId: string) => void;
 }
 
-export function ImageContent({ block }: ImageContentProps) {
+export function ImageContent({
+  block,
+  screenshotId,
+  onViewScreenshot,
+}: ImageContentProps) {
   // Use a fixed size for the image since width/height are not available on block.source
   const width = 250;
   const height = 250;
+  const handleSelect = () => {
+    if (onViewScreenshot) {
+      onViewScreenshot(screenshotId);
+    }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!onViewScreenshot) {
+      return;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onViewScreenshot(screenshotId);
+    }
+  };
+
   return (
     <div className="max-w-4/5 mb-3">
       <div className="flex items-center gap-2 mb-2">
@@ -23,9 +45,19 @@ export function ImageContent({ block }: ImageContentProps) {
           Screenshot taken
         </p>
       </div>
-      <div className="border border-bytebot-bronze-light-7 rounded-md overflow-hidden inline-block">
+      <div
+        className={`border border-bytebot-bronze-light-7 rounded-md overflow-hidden inline-block ${
+          onViewScreenshot
+            ? "cursor-pointer transition hover:ring-2 hover:ring-bytebot-bronze-light-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bytebot-bronze-light-7"
+            : ""
+        }`}
+        role={onViewScreenshot ? "button" : undefined}
+        tabIndex={onViewScreenshot ? 0 : -1}
+        onClick={onViewScreenshot ? handleSelect : undefined}
+        onKeyDown={onViewScreenshot ? handleKeyDown : undefined}
+      >
         <Image
-          src={`data:image/png;base64,${block.source.data}`}
+          src={`data:${block.source.media_type};base64,${block.source.data}`}
           alt="Screenshot"
           width={width}
           height={height}

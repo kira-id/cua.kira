@@ -11,6 +11,7 @@ import {
   ClickMouseAction,
   ComputerAction,
   DragMouseAction,
+  ImageMediaType,
   ScrollAction,
   TypeKeysAction,
   TypeTextAction,
@@ -35,7 +36,7 @@ export class InputTrackingService implements OnModuleDestroy {
   private clickMouseActionTimeout: NodeJS.Timeout | null = null;
   private readonly CLICK_DEBOUNCE_MS = 250;
 
-  private screenshot: { image: string } | null = null;
+  private screenshot: { image: string; mediaType: ImageMediaType } | null = null;
   private screenshotTimeout: NodeJS.Timeout | null = null;
   private readonly SCREENSHOT_DEBOUNCE_MS = 250;
 

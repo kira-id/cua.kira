@@ -23,10 +23,12 @@ export type TextContentBlock = {
   text: string;
 } & MessageContentBlockBase;
 
+export type ImageMediaType = "image/png" | "image/jpeg" | "image/webp";
+
 export type ImageContentBlock = {
   type: MessageContentType.Image;
   source: {
-    media_type: "image/png";
+    media_type: ImageMediaType;
     type: "base64";
     data: string;
   };

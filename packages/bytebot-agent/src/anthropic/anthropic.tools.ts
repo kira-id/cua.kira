@@ -9,7 +9,7 @@ function agentToolToAnthropicTool(agentTool: any): Anthropic.Tool {
 }
 
 /**
- * Creates a mapped object of tools by name
+ * Individual tool exports for selective usage (keeping for backward compatibility)
  */
 const toolMap = agentTools.reduce(
   (acc, tool) => {
@@ -30,7 +30,7 @@ const toolMap = agentTools.reduce(
   {} as Record<string, Anthropic.Tool>,
 );
 
-// Export individual tools with proper names
+// Export individual tools with proper names for consistency (keeping for backward compatibility)
 export const moveMouseTool = toolMap.moveMouseTool;
 export const traceMouseTool = toolMap.traceMouseTool;
 export const clickMouseTool = toolMap.clickMouseTool;

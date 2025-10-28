@@ -27,7 +27,7 @@ RUN apt-get update && apt-get install -y \
     # Development tools
     python3 python3-pip curl wget git vim \
     # Utilities
-    supervisor netcat-openbsd \
+    supervisor netcat-openbsd scrot \
     # Applications
     xpdf gedit xpaint \
     # Libraries

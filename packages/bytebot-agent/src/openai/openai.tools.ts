@@ -11,11 +11,11 @@ function agentToolToOpenAITool(agentTool: any): OpenAI.Responses.FunctionTool {
 }
 
 /**
- * Creates a mapped object of tools by name
+ * Individual tool exports for selective usage (keeping for backward compatibility)
  */
 const toolMap = agentTools.reduce(
   (acc, tool) => {
-    const anthropicTool = agentToolToOpenAITool(tool);
+    const openaiTool = agentToolToOpenAITool(tool);
     const camelCaseName = tool.name
       .split('_')
       .map((part, index) => {
@@ -26,13 +26,13 @@ const toolMap = agentTools.reduce(
       .join('')
       .replace(/^computer/, '');
 
-    acc[camelCaseName + 'Tool'] = anthropicTool;
+    acc[camelCaseName + 'Tool'] = openaiTool;
     return acc;
   },
   {} as Record<string, OpenAI.Responses.FunctionTool>,
 );
 
-// Export individual tools with proper names
+// Export individual tools with proper names for consistency (keeping for backward compatibility)
 export const moveMouseTool = toolMap.moveMouseTool;
 export const traceMouseTool = toolMap.traceMouseTool;
 export const clickMouseTool = toolMap.clickMouseTool;

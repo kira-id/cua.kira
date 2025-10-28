@@ -215,7 +215,17 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
     } catch (error: any) {
       this.logger.error(
         `Error sending message to OpenRouter: ${error.message}`,
-        error.stack,
+        {
+          error: error.message,
+          stack: error.stack,
+          model,
+          useTools,
+          systemPromptLength: systemPrompt.length,
+          messagesCount: messages.length,
+          taskId: messages.length > 0 ? messages[0].taskId : 'unknown',
+          toolNames: useTools ? openrouterTools.map(t => t.function.name) : [],
+          timestamp: new Date().toISOString()
+        },
       );
 
       if (error.name === 'AbortError') {
@@ -393,34 +403,34 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
           const textParts: string[] = [];
           const toolUseBlocksFromContent: ToolUseContentBlock[] = [];
 
-          for (const part of message.content) {
-            if (
-              (part.type === 'text' || part.type === 'output_text') &&
-              typeof part.text === 'string' &&
-              part.text.trim().length > 0
-            ) {
-              textParts.push(part.text);
-            }
+    for (const part of message.content) {
+      if (
+        (part.type === 'text' || part.type === 'output_text') &&
+        typeof part.text === 'string' &&
+        part.text.trim().length > 0
+      ) {
+        textParts.push(part.text);
+      }
 
-            if (
-              part.type === 'tool_use' ||
-              part.type === 'function_call' ||
-              part.type === 'function'
-            ) {
-              const toolUseId =
-                part.id || `openrouter-tool-${parsedToolCallIds.size + 1}`;
-              parsedToolCallIds.add(toolUseId);
+      if (
+        part.type === 'tool_use' ||
+        part.type === 'function_call' ||
+        part.type === 'function'
+      ) {
+        const toolUseId =
+          part.id || `openrouter-tool-${parsedToolCallIds.size + 1}`;
+        parsedToolCallIds.add(toolUseId);
 
-              const toolInput = this.parseToolInput(part.input ?? part.arguments);
-              if (typeof part.name === 'string') {
-                toolUseBlocksFromContent.push({
-                  type: MessageContentType.ToolUse,
-                  id: toolUseId,
-                  name: part.name,
-                  input: toolInput,
-                } as ToolUseContentBlock);
-              }
-            }
+        const toolInput = this.parseToolInput(part.input ?? part.arguments);
+        if (typeof part.name === 'string') {
+          toolUseBlocksFromContent.push({
+            type: MessageContentType.ToolUse,
+            id: toolUseId,
+            name: part.name,
+            input: toolInput,
+          } as ToolUseContentBlock);
+        }
+      }
           }
 
           if (textParts.length > 0) {

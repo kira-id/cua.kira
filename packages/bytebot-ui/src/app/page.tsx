@@ -26,6 +26,8 @@ interface FileWithBase64 {
   size: number;
 }
 
+const MODEL_STORAGE_KEY = "bytebot-ui:selected-model";
+
 export default function Home() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -39,17 +41,67 @@ export default function Home() {
   const [desktopError, setDesktopError] = useState<string | null>(null);
   const [isUpdatingControl, setIsUpdatingControl] = useState(false);
   const router = useRouter();
+
+  const persistModelSelection = useCallback((modelName: string | null) => {
+    if (typeof window === "undefined") return;
+
+    try {
+      if (modelName) {
+        window.localStorage.setItem(MODEL_STORAGE_KEY, modelName);
+      } else {
+        window.localStorage.removeItem(MODEL_STORAGE_KEY);
+      }
+    } catch (storageError) {
+      console.error("Failed to persist model selection", storageError);
+    }
+  }, []);
+
   const activeTaskId = activeTask?.id ?? null;
 
   useEffect(() => {
     fetch("/api/tasks/models")
       .then((res) => res.json())
-      .then((data) => {
+      .then((data: Model[]) => {
         setModels(data);
-        if (data.length > 0) setSelectedModel(data[0]);
+        if (data.length === 0) {
+          setSelectedModel(null);
+          persistModelSelection(null);
+          return;
+        }
+
+        let savedModelName: string | null = null;
+        if (typeof window !== "undefined") {
+          try {
+            savedModelName = window.localStorage.getItem(MODEL_STORAGE_KEY);
+          } catch (storageError) {
+            console.error("Failed to read stored model selection", storageError);
+          }
+        }
+
+        const savedModel =
+          savedModelName != null
+            ? data.find((model) => model.name === savedModelName)
+            : null;
+
+        const nextModel = savedModel ?? data[0];
+        setSelectedModel(nextModel);
+
+        const nextModelName = nextModel?.name ?? null;
+        if (nextModelName !== savedModelName) {
+          persistModelSelection(nextModelName);
+        }
       })
       .catch((err) => console.error("Failed to load models", err));
-  }, []);
+  }, [persistModelSelection]);
+
+  const handleModelChange = useCallback(
+    (modelName: string) => {
+      const model = models.find((m) => m.name === modelName) || null;
+      setSelectedModel(model);
+      persistModelSelection(model?.name ?? null);
+    },
+    [models, persistModelSelection],
+  );
 
   const loadActiveTask = useCallback(async () => {
     setIsLoadingDesktop(true);
@@ -288,11 +340,7 @@ export default function Home() {
                 <div className="mt-2">
                   <Select
                     value={selectedModel?.name}
-                    onValueChange={(val) =>
-                      setSelectedModel(
-                        models.find((m) => m.name === val) || null,
-                      )
-                    }
+                    onValueChange={handleModelChange}
                   >
                     <SelectTrigger className="w-auto">
                       <SelectValue placeholder="Select a model" />
@@ -384,11 +432,7 @@ export default function Home() {
                 <div className="mt-2">
                   <Select
                     value={selectedModel?.name}
-                    onValueChange={(val) =>
-                      setSelectedModel(
-                        models.find((m) => m.name === val) || null,
-                      )
-                    }
+                    onValueChange={handleModelChange}
                   >
                     <SelectTrigger className="w-auto">
                       <SelectValue placeholder="Select a model" />

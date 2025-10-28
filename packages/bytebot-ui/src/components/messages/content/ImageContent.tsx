@@ -57,7 +57,7 @@ export function ImageContent({
         onKeyDown={onViewScreenshot ? handleKeyDown : undefined}
       >
         <Image
-          src={`data:image/png;base64,${block.source.data}`}
+          src={`data:${block.source.media_type};base64,${block.source.data}`}
           alt="Screenshot"
           width={width}
           height={height}

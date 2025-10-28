@@ -95,16 +95,32 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
     signal?: AbortSignal,
   ): Promise<BytebotAgentResponse> {
     try {
+      this.logger.debug(
+        `OpenRouter send called with params: ${this.serializeForLog({
+          systemPrompt,
+          model,
+          useTools,
+          hasSignal: Boolean(signal),
+        })}`,
+      );
+      this.logger.debug(
+        `Raw messages input: ${this.serializeForLog(messages)}`,
+      );
+
       const openrouterMessages = this.formatMessagesForOpenRouter(
         systemPrompt,
         messages,
       );
 
+      this.logger.debug(
+        `Formatted OpenRouter messages: ${this.serializeForLog(openrouterMessages)}`,
+      );
+
       const body: any = {
         model,
         messages: openrouterMessages,
-        max_tokens: 8192,
-        temperature: 0.7,
+        // max_tokens: OPENROUTER_MODELS[model].contextWindow,
+        // temperature: 0.7,
       };
 
       if (useTools) {
@@ -112,17 +128,28 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
         body.tool_choice = 'auto';
       }
 
+      this.logger.debug(`Request body payload: ${this.serializeForLog(body)}`);
+
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.apiKey}`,
-          'HTTP-Referer': 'https://bytebot.ai',
-          'X-Title': 'Bytebot Agent',
+          'HTTP-Referer': 'https://kira.id',
+          'X-Title': 'Kira.id Agent',
         },
         body: JSON.stringify(body),
         signal,
       });
+
+      this.logger.debug(
+        `OpenRouter response status: ${response.status} ${response.statusText}`,
+      );
+      this.logger.debug(
+        `OpenRouter response headers: ${this.serializeForLog(
+          Object.fromEntries(response.headers.entries()),
+        )}`,
+      );
 
       if (!response.ok) {
         if (response.status === 429) {
@@ -135,8 +162,21 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
 
       const data: OpenRouterResponse = await response.json();
 
+      this.logger.debug(
+        `OpenRouter response body: ${this.serializeForLog(data)}`,
+      );
+
+      const contentBlocks = this.formatOpenRouterResponse(data);
+
+      this.logger.debug(
+        `Formatted content blocks: ${this.serializeForLog(contentBlocks)}`,
+      );
+      this.logger.debug(
+        `Token usage summary: ${this.serializeForLog(data.usage)}`,
+      );
+
       return {
-        contentBlocks: this.formatOpenRouterResponse(data),
+        contentBlocks,
         tokenUsage: {
           inputTokens: data.usage?.prompt_tokens || 0,
           outputTokens: data.usage?.completion_tokens || 0,
@@ -162,7 +202,7 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
       const response = await fetch(`${this.baseUrl}/models`, {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
-          'HTTP-Referer': 'https://bytebot.ai',
+          'HTTP-Referer': 'https://kira.id',
           'X-Title': 'Bytebot Agent',
         },
       });
@@ -177,7 +217,7 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
       const response = await fetch(`${this.baseUrl}/models`, {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
-          'HTTP-Referer': 'https://bytebot.ai',
+          'HTTP-Referer': 'https://kira.id',
           'X-Title': 'Bytebot Agent',
         },
       });
@@ -477,5 +517,16 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
     }
 
     return {};
+  }
+
+  private serializeForLog(value: unknown): string {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch (error) {
+      if (error instanceof Error) {
+        return `Failed to serialize value for log: ${error.message}`;
+      }
+      return 'Failed to serialize value for log';
+    }
   }
 }

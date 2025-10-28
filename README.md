@@ -16,7 +16,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Discord](https://img.shields.io/discord/1232768900274585720?color=7289da&label=discord)](https://discord.com/invite/d9ewZkWPTP)
 
-[🌐 Website](https://bytebot.ai) • [📚 Documentation](https://docs.bytebot.ai) • [💬 Discord](https://discord.com/invite/d9ewZkWPTP) • [𝕏 Twitter](https://x.com/bytebot_ai)
+[🌐 Website](https://kira.id) • [📚 Documentation](https://docs.kira.id) • [💬 Discord](https://discord.com/invite/d9ewZkWPTP) • [𝕏 Twitter](https://x.com/bytebot_ai)
 
 <!-- Keep these links. Translations will automatically update with the README. -->
 [Deutsch](https://zdoc.app/de/bytebot-ai/bytebot) | 
@@ -105,7 +105,7 @@ docker-compose -f docker/docker-compose.yml up -d
 # Open http://localhost:9992
 ```
 
-[Full deployment guide →](https://docs.bytebot.ai/quickstart)
+[Full deployment guide →](https://docs.kira.id/quickstart)
 
 ## How It Works
 
@@ -185,7 +185,7 @@ curl -X POST http://localhost:9990/computer-use \
   -d '{"action": "click_mouse", "coordinate": [500, 300]}'
 ```
 
-[Full API documentation →](https://docs.bytebot.ai/api-reference/introduction)
+[Full API documentation →](https://docs.kira.id/api-reference/introduction)
 
 ## Setting Up Your Desktop Agent
 
@@ -250,7 +250,7 @@ CUA.kira is built with:
 
 ### Multiple AI Providers
 
-Use any AI provider through our [LiteLLM integration](https://docs.bytebot.ai/deployment/litellm):
+Use any AI provider through our [LiteLLM integration](https://docs.kira.id/deployment/litellm):
 
 - Azure OpenAI
 - AWS Bedrock
@@ -271,12 +271,12 @@ helm install cua-kira ./helm \
   --set agent.env.ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-[Enterprise deployment guide →](https://docs.bytebot.ai/deployment/helm)
+[Enterprise deployment guide →](https://docs.kira.id/deployment/helm)
 
 ## Community & Support
 
 - **Discord**: [Join our community](https://discord.com/invite/d9ewZkWPTP) for help and discussions
-- **Documentation**: Comprehensive guides at [docs.bytebot.ai](https://docs.bytebot.ai)
+- **Documentation**: Comprehensive guides at [docs.kira.id](https://docs.kira.id)
 - **GitHub Issues**: Report bugs and request features
 
 ## Contributing

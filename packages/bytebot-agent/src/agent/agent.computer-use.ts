@@ -20,10 +20,16 @@ import {
   isApplicationToolUseBlock,
   isPasteTextToolUseBlock,
   isReadFileToolUseBlock,
+  ImageMediaType,
 } from '@bytebot/shared';
 import { Logger } from '@nestjs/common';
 
 const BYTEBOT_DESKTOP_BASE_URL = process.env.BYTEBOT_DESKTOP_BASE_URL as string;
+
+type ScreenshotResult = {
+  data: string;
+  mediaType: ImageMediaType;
+};
 
 export async function handleComputerToolUse(
   block: ComputerToolUseContentBlock,
@@ -37,7 +43,7 @@ export async function handleComputerToolUse(
     logger.debug('Processing screenshot request');
     try {
       logger.debug('Taking screenshot');
-      const image = await screenshot();
+      const screenshotResult = await screenshot();
       logger.debug('Screenshot captured successfully');
 
       return {
@@ -47,8 +53,8 @@ export async function handleComputerToolUse(
           {
             type: MessageContentType.Image,
             source: {
-              data: image,
-              media_type: 'image/png',
+              data: screenshotResult.data,
+              media_type: screenshotResult.mediaType,
               type: 'base64',
             },
           },
@@ -181,7 +187,7 @@ export async function handleComputerToolUse(
       }
     }
 
-    let image: string | null = null;
+    let screenshotResult: ScreenshotResult | null = null;
     try {
       // Wait before taking screenshot to allow UI to settle
       const delayMs = 750; // 750ms delay
@@ -189,7 +195,7 @@ export async function handleComputerToolUse(
       await new Promise((resolve) => setTimeout(resolve, delayMs));
 
       logger.debug('Taking screenshot');
-      image = await screenshot();
+      screenshotResult = await screenshot();
       logger.debug('Screenshot captured successfully');
     } catch (error) {
       logger.error('Failed to take screenshot', error);
@@ -207,12 +213,12 @@ export async function handleComputerToolUse(
       ],
     };
 
-    if (image) {
+    if (screenshotResult) {
       toolResult.content.push({
         type: MessageContentType.Image,
         source: {
-          data: image,
-          media_type: 'image/png',
+          data: screenshotResult.data,
+          media_type: screenshotResult.mediaType,
           type: 'base64',
         },
       });
@@ -523,7 +529,7 @@ async function cursorPosition(): Promise<Coordinates> {
   }
 }
 
-async function screenshot(): Promise<string> {
+async function screenshot(): Promise<ScreenshotResult> {
   console.log('Taking screenshot');
 
   try {
@@ -541,13 +547,20 @@ async function screenshot(): Promise<string> {
       throw new Error(`Failed to take screenshot: ${response.statusText}`);
     }
 
-    const data = await response.json();
+    const data: { image?: string; mediaType?: string } =
+      await response.json();
 
     if (!data.image) {
       throw new Error('Failed to take screenshot: No image data received');
     }
 
-    return data.image; // Base64 encoded image
+    const mediaType =
+      typeof data.mediaType === 'string' &&
+      ['image/png', 'image/jpeg', 'image/webp'].includes(data.mediaType)
+        ? (data.mediaType as ImageMediaType)
+        : 'image/png';
+
+    return { data: data.image, mediaType };
   } catch (error) {
     console.error('Error in screenshot action:', error);
     throw error;

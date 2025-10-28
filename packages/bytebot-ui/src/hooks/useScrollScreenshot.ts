@@ -11,6 +11,7 @@ export function useScrollScreenshot({ messages, scrollContainerRef }: UseScrollS
   const [currentScreenshot, setCurrentScreenshot] = useState<ScreenshotData | null>(null);
   const [allScreenshots, setAllScreenshots] = useState<ScreenshotData[]>([]);
   const lastScrollTime = useRef<number>(0);
+  const previewPinnedRef = useRef<boolean>(false);
 
   // Extract screenshots whenever messages change
   useEffect(() => {
@@ -30,9 +31,11 @@ export function useScrollScreenshot({ messages, scrollContainerRef }: UseScrollS
         } else {
           setCurrentScreenshot(screenshots[screenshots.length - 1]);
         }
+        previewPinnedRef.current = false;
       }, 100);
     } else if (screenshots.length === 0) {
       setCurrentScreenshot(null);
+      previewPinnedRef.current = false;
     } else if (screenshots.length > 0 && currentScreenshot) {
       // Ensure current screenshot still exists in the updated list
       const stillExists = screenshots.some(
@@ -40,6 +43,7 @@ export function useScrollScreenshot({ messages, scrollContainerRef }: UseScrollS
       );
       if (!stillExists) {
         setCurrentScreenshot(screenshots[screenshots.length - 1]);
+        previewPinnedRef.current = false;
         return;
       }
 
@@ -82,6 +86,7 @@ export function useScrollScreenshot({ messages, scrollContainerRef }: UseScrollS
 
     const now = Date.now();
     if (now - lastScrollTime.current < 100) return;
+    if (previewPinnedRef.current) return;
     lastScrollTime.current = now;
 
     setTimeout(() => {
@@ -104,10 +109,17 @@ export function useScrollScreenshot({ messages, scrollContainerRef }: UseScrollS
     if (!container) return;
 
     const scrollHandler = (e: Event) => {
-      // Only handle scroll events from the actual container
-      if (e.target === container) {
-        handleScroll(container);
+      if (e.target !== container) return;
+
+      if (previewPinnedRef.current) {
+        if (e.isTrusted) {
+          previewPinnedRef.current = false;
+        } else {
+          return;
+        }
       }
+
+      handleScroll(container);
     };
 
     // Only attach to the container itself
@@ -126,8 +138,10 @@ export function useScrollScreenshot({ messages, scrollContainerRef }: UseScrollS
         allScreenshots.find((item) => item.id === screenshotId) ?? null;
       const screenshotToSet = targetScreenshot ?? fallbackScreenshot ?? null;
 
+      previewPinnedRef.current = !!screenshotToSet;
       setCurrentScreenshot((prevScreenshot) => {
         if (!screenshotToSet) {
+          previewPinnedRef.current = false;
           return prevScreenshot;
         }
         if (prevScreenshot?.id === screenshotToSet.id) {

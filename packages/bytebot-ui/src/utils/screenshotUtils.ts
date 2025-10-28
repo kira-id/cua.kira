@@ -1,9 +1,14 @@
 import { Message } from "@/types";
-import { isToolResultContentBlock, isImageContentBlock } from "@bytebot/shared";
+import {
+  ImageMediaType,
+  isToolResultContentBlock,
+  isImageContentBlock,
+} from "@bytebot/shared";
 
 export interface ScreenshotData {
   id: string;
   base64Data: string;
+  mediaType: ImageMediaType;
   messageIndex: number;
   blockIndex: number;
   contentIndex: number;
@@ -25,6 +30,7 @@ export function extractScreenshots(messages: Message[]): ScreenshotData[] {
             screenshots.push({
               id: `${message.id}-${blockIndex}-${contentIndex}`,
               base64Data: contentItem.source.data,
+              mediaType: contentItem.source.media_type,
               messageIndex,
               blockIndex,
               contentIndex,

@@ -31,7 +31,7 @@ export function ScreenshotViewer({ screenshot, className = '' }: ScreenshotViewe
   return (
     <div className={`relative overflow-hidden ${className}`}>
       <Image
-        src={`data:image/png;base64,${currentScreenshot.base64Data}`}
+        src={`data:${currentScreenshot.mediaType};base64,${currentScreenshot.base64Data}`}
         alt="Task screenshot"
         fill
         className="object-contain"

@@ -52,7 +52,7 @@ describe('OpenRouterService', () => {
       expect(fetch).toHaveBeenCalledWith('https://openrouter.ai/api/v1/models', {
         headers: {
           Authorization: 'Bearer test-api-key',
-          'HTTP-Referer': 'https://bytebot.ai',
+          'HTTP-Referer': 'https://kira.id',
           'X-Title': 'Bytebot Agent',
         },
       });

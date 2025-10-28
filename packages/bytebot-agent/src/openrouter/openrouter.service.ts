@@ -11,7 +11,7 @@ import {
   isComputerToolUseContentBlock,
   isImageContentBlock,
 } from '@bytebot/shared';
-import { DEFAULT_MODEL } from './openrouter.constants';
+import { DEFAULT_MODEL, OPENROUTER_MODELS } from './openrouter.constants';
 import { Message, Role } from '@prisma/client';
 import { openrouterTools } from './openrouter.tools';
 import {
@@ -20,6 +20,7 @@ import {
   BytebotAgentResponse,
 } from '../agent/agent.types';
 import { BaseProvider } from '../providers/base-provider.interface';
+import { RateLimitError } from '../shared/errors';
 
 type OpenRouterMessageContentPart = {
   type: string;
@@ -119,16 +120,22 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
         `Formatted OpenRouter messages: ${this.serializeForLog(openrouterMessages)}`,
       );
 
+      const maxTokens = 8192;
       const body: any = {
         model,
         messages: openrouterMessages,
-        // max_tokens: OPENROUTER_MODELS[model].contextWindow,
-        // temperature: 0.7,
+        max_tokens: maxTokens,
+        temperature: 0.7,
       };
 
       if (useTools) {
         body.tools = openrouterTools;
         body.tool_choice = 'auto';
+        this.logger.debug(
+          `[DEBUG] OpenRouter tools being sent: ${this.serializeForLog(openrouterTools)}`,
+        );
+      } else {
+        this.logger.debug(`[DEBUG] OpenRouter tools disabled for this request`);
       }
 
       this.logger.debug(`Request body payload: ${this.serializeForLog(body)}`);
@@ -160,7 +167,7 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
 
       if (!response.ok) {
         if (response.status === 429) {
-          throw new Error('Rate limit exceeded');
+          throw new RateLimitError('Rate limit exceeded');
         }
         throw new Error(
           `OpenRouter API error: ${response.status} ${response.statusText}`,
@@ -183,6 +190,38 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
       this.logger.debug(
         `Formatted content blocks: ${this.serializeForLog(contentBlocks)}`,
       );
+
+      // Debug: Check for tool calls in the response
+      const hasToolCalls =
+        data.choices?.[0]?.message?.tool_calls?.length &&
+        data.choices[0].message.tool_calls.length > 0;
+      this.logger.debug(
+        `[DEBUG] OpenRouter response has tool calls: ${hasToolCalls}`,
+      );
+      if (hasToolCalls) {
+        this.logger.debug(
+          `[DEBUG] Tool calls received: ${this.serializeForLog(data.choices[0].message.tool_calls)}`,
+        );
+
+        // Special logging for click_mouse tool calls
+        const toolCalls = data.choices[0].message.tool_calls;
+        if (toolCalls) {
+          const clickMouseCalls = toolCalls.filter(
+            (call) => call.function.name === 'computer_click_mouse',
+          );
+          if (clickMouseCalls.length > 0) {
+            this.logger.debug(
+              `[CLICK DEBUG] Found ${clickMouseCalls.length} click_mouse tool calls`,
+            );
+            clickMouseCalls.forEach((call) => {
+              this.logger.debug(
+                `[CLICK DEBUG] Raw click_mouse call: ${this.serializeForLog(call)}`,
+              );
+            });
+          }
+        }
+      }
+
       this.logger.debug(
         `Token usage summary: ${this.serializeForLog(data.usage)}`,
       );
@@ -223,8 +262,10 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
           systemPromptLength: systemPrompt.length,
           messagesCount: messages.length,
           taskId: messages.length > 0 ? messages[0].taskId : 'unknown',
-          toolNames: useTools ? openrouterTools.map(t => t.function.name) : [],
-          timestamp: new Date().toISOString()
+          toolNames: useTools
+            ? openrouterTools.map((t) => t.function.name)
+            : [],
+          timestamp: new Date().toISOString(),
         },
       );
 
@@ -321,7 +362,7 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
             break;
           }
           case MessageContentType.Image: {
-            const imageBlock = block as ImageContentBlock;
+            const imageBlock = block;
             openrouterMessages.push(
               this.createImageMessage(
                 message.role === Role.USER ? 'user' : 'assistant',
@@ -351,14 +392,14 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
             break;
           }
           case MessageContentType.ToolResult: {
-            const toolResult = block as ToolResultContentBlock;
+            const toolResult = block;
             const textOutputs = toolResult.content
               .filter((content) => content.type === MessageContentType.Text)
-              .map((content) => (content as TextContentBlock).text)
+              .map((content) => content.text)
               .filter((text) => text.trim().length > 0);
             const imageContents = toolResult.content.filter(
               (content) => content.type === MessageContentType.Image,
-            ) as ImageContentBlock[];
+            );
 
             const toolContent = textOutputs.join('\n').trim();
             openrouterMessages.push({
@@ -393,9 +434,20 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
     const contentBlocks: MessageContentBlock[] = [];
     const parsedToolCallIds = new Set<string>();
 
+    this.logger.debug(
+      `[DEBUG] formatOpenRouterResponse called with ${response.choices?.length || 0} choices`,
+    );
+
     if (response.choices && response.choices.length > 0) {
       const choice = response.choices[0];
       const message = choice.message;
+
+      this.logger.debug(
+        `[DEBUG] Processing choice with message content type: ${typeof message.content}`,
+      );
+      this.logger.debug(
+        `[DEBUG] Message has tool_calls: ${!!message.tool_calls}`,
+      );
 
       // Handle text content
       if (message.content) {
@@ -403,34 +455,36 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
           const textParts: string[] = [];
           const toolUseBlocksFromContent: ToolUseContentBlock[] = [];
 
-    for (const part of message.content) {
-      if (
-        (part.type === 'text' || part.type === 'output_text') &&
-        typeof part.text === 'string' &&
-        part.text.trim().length > 0
-      ) {
-        textParts.push(part.text);
-      }
+          for (const part of message.content) {
+            if (
+              (part.type === 'text' || part.type === 'output_text') &&
+              typeof part.text === 'string' &&
+              part.text.trim().length > 0
+            ) {
+              textParts.push(part.text);
+            }
 
-      if (
-        part.type === 'tool_use' ||
-        part.type === 'function_call' ||
-        part.type === 'function'
-      ) {
-        const toolUseId =
-          part.id || `openrouter-tool-${parsedToolCallIds.size + 1}`;
-        parsedToolCallIds.add(toolUseId);
+            if (
+              part.type === 'tool_use' ||
+              part.type === 'function_call' ||
+              part.type === 'function'
+            ) {
+              const toolUseId =
+                part.id || `openrouter-tool-${parsedToolCallIds.size + 1}`;
+              parsedToolCallIds.add(toolUseId);
 
-        const toolInput = this.parseToolInput(part.input ?? part.arguments);
-        if (typeof part.name === 'string') {
-          toolUseBlocksFromContent.push({
-            type: MessageContentType.ToolUse,
-            id: toolUseId,
-            name: part.name,
-            input: toolInput,
-          } as ToolUseContentBlock);
-        }
-      }
+              const toolInput = this.parseToolInput(
+                part.input ?? part.arguments,
+              );
+              if (typeof part.name === 'string') {
+                toolUseBlocksFromContent.push({
+                  type: MessageContentType.ToolUse,
+                  id: toolUseId,
+                  name: part.name,
+                  input: toolInput,
+                } as ToolUseContentBlock);
+              }
+            }
           }
 
           if (textParts.length > 0) {
@@ -471,19 +525,82 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
 
       // Handle tool calls
       if (message.tool_calls && message.tool_calls.length > 0) {
+        this.logger.debug(
+          `[TOOL CALL DEBUG] Processing ${message.tool_calls.length} tool calls`,
+        );
         for (const toolCall of message.tool_calls) {
           if (parsedToolCallIds.has(toolCall.id)) {
+            this.logger.debug(
+              `[TOOL CALL DEBUG] Tool call ${toolCall.id} already processed, skipping`,
+            );
             continue;
           }
 
           let parsedArguments: Record<string, unknown> = {};
           try {
+            const rawArgs = toolCall.function.arguments;
+            this.logger.debug(
+              `[TOOL CALL DEBUG] Parsing arguments for ${toolCall.function.name}: ${rawArgs}`,
+            );
             parsedArguments = toolCall.function.arguments
               ? JSON.parse(toolCall.function.arguments)
               : {};
+            this.logger.debug(
+              `[TOOL CALL DEBUG] Parsed arguments: ${JSON.stringify(parsedArguments)}`,
+            );
           } catch (error) {
             this.logger.warn(
               `Failed to parse tool call arguments for ${toolCall.function.name}: ${toolCall.function.arguments}`,
+            );
+            this.logger.warn(
+              `[TOOL CALL DEBUG] Parse error: ${(error as Error).message}`,
+            );
+          }
+
+          // Special validation for click_mouse tool calls
+          if (toolCall.function.name === 'computer_click_mouse') {
+            this.logger.debug(
+              `[TOOL CALL DEBUG] Validating click_mouse parameters`,
+            );
+            const coordinates = parsedArguments.coordinates as any;
+            const button = parsedArguments.button;
+
+            if (coordinates) {
+              if (
+                typeof coordinates.x !== 'number' ||
+                typeof coordinates.y !== 'number'
+              ) {
+                this.logger.error(
+                  `[TOOL CALL DEBUG] Invalid coordinates in click_mouse: x=${coordinates.x}, y=${coordinates.y}`,
+                );
+                // Try to fix if they're strings
+                if (
+                  typeof coordinates.x === 'string' &&
+                  typeof coordinates.y === 'string'
+                ) {
+                  (parsedArguments.coordinates as any).x = parseFloat(
+                    coordinates.x,
+                  );
+                  (parsedArguments.coordinates as any).y = parseFloat(
+                    coordinates.y,
+                  );
+                  this.logger.debug(
+                    `[TOOL CALL DEBUG] Fixed coordinates: x=${(parsedArguments.coordinates as any).x}, y=${(parsedArguments.coordinates as any).y}`,
+                  );
+                }
+              } else {
+                this.logger.debug(
+                  `[TOOL CALL DEBUG] Coordinates valid: x=${coordinates.x}, y=${coordinates.y}`,
+                );
+              }
+            } else {
+              this.logger.debug(
+                `[TOOL CALL DEBUG] No coordinates provided (using current position)`,
+              );
+            }
+
+            this.logger.debug(
+              `[TOOL CALL DEBUG] Button: ${button}, clickCount: ${parsedArguments.clickCount}`,
             );
           }
 
@@ -523,9 +640,7 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
       try {
         return JSON.parse(rawInput);
       } catch (error) {
-        this.logger.warn(
-          `Failed to parse tool input from string: ${rawInput}`,
-        );
+        this.logger.warn(`Failed to parse tool input from string: ${rawInput}`);
         return {};
       }
     }
@@ -664,10 +779,13 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
 
     // Check for empty content
     const hasContent =
-      (typeof message?.content === 'string' && message.content.trim().length > 0) ||
-      (Array.isArray(message?.content) && message.content.some(part =>
-        typeof part.text === 'string' && part.text.trim().length > 0
-      ));
+      (typeof message?.content === 'string' &&
+        message.content.trim().length > 0) ||
+      (Array.isArray(message?.content) &&
+        message.content.some(
+          (part) =>
+            typeof part.text === 'string' && part.text.trim().length > 0,
+        ));
 
     if (!hasContent) {
       this.logger.warn(

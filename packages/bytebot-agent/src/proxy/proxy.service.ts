@@ -169,7 +169,7 @@ export class ProxyService implements BytebotAgentService {
               break;
             }
             case MessageContentType.Image: {
-              const imageBlock = block as ImageContentBlock;
+              const imageBlock = block;
               chatMessages.push(this.createImageMessage('user', imageBlock));
               break;
             }
@@ -192,7 +192,7 @@ export class ProxyService implements BytebotAgentService {
               break;
             }
             case MessageContentType.Thinking: {
-              const thinkingBlock = block as ThinkingContentBlock;
+              const thinkingBlock = block;
               const message: ChatCompletionMessageParam = {
                 role: 'assistant',
                 content: null,
@@ -202,14 +202,14 @@ export class ProxyService implements BytebotAgentService {
               break;
             }
             case MessageContentType.ToolResult: {
-              const toolResultBlock = block as ToolResultContentBlock;
+              const toolResultBlock = block;
               const textOutputs = toolResultBlock.content
                 .filter((content) => content.type === MessageContentType.Text)
-                .map((content) => (content as TextContentBlock).text)
+                .map((content) => content.text)
                 .filter((text) => text.trim().length > 0);
               const imageContents = toolResultBlock.content.filter(
                 (content) => content.type === MessageContentType.Image,
-              ) as ImageContentBlock[];
+              );
 
               const toolContent = textOutputs.join('\n').trim();
               chatMessages.push({
@@ -263,17 +263,17 @@ export class ProxyService implements BytebotAgentService {
           textParts.push(candidate.text.trim());
         }
 
-        if (
-          candidate &&
-          'id' in candidate && 'name' in candidate
-        ) {
+        if (candidate && 'id' in candidate && 'name' in candidate) {
           const toolId =
             (candidate as any).id ||
             `proxy-inline-tool-${parsedToolCallIds.size + contentBlocks.length + 1}`;
           const toolInput = this.parseToolInput(
             (candidate as any).input ?? (candidate as any).arguments,
           );
-          if (typeof (candidate as any).name === 'string' && (candidate as any).name.length > 0) {
+          if (
+            typeof (candidate as any).name === 'string' &&
+            (candidate as any).name.length > 0
+          ) {
             contentBlocks.push({
               type: MessageContentType.ToolUse,
               id: toolId,
@@ -379,9 +379,7 @@ export class ProxyService implements BytebotAgentService {
       try {
         return JSON.parse(rawInput);
       } catch (error) {
-        this.logger.warn(
-          `Failed to parse tool input from string: ${rawInput}`,
-        );
+        this.logger.warn(`Failed to parse tool input from string: ${rawInput}`);
         return {};
       }
     }

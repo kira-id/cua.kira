@@ -1,4 +1,4 @@
-import { ImageMediaType } from "@bytebot/shared";
+import { ImageMediaType, getDisplayWidth, getDisplayHeight } from "@bytebot/shared";
 
 type CompressionFormat = "png" | "jpeg" | "webp";
 
@@ -52,8 +52,8 @@ export const SCREENSHOT_CONFIG = {
   targetSizeKB: toNumber(process.env.SCREENSHOT_TARGET_SIZE_KB, 512),
   initialQuality: toNumber(process.env.SCREENSHOT_INITIAL_QUALITY, 85),
   minQuality: toNumber(process.env.SCREENSHOT_MIN_QUALITY, 40),
-  maxWidth: toNumber(process.env.SCREENSHOT_MAX_WIDTH, 1024),
-  maxHeight: toNumber(process.env.SCREENSHOT_MAX_HEIGHT, 768),
+  maxWidth: toNumber(process.env.SCREENSHOT_MAX_WIDTH, getDisplayWidth()),
+  maxHeight: toNumber(process.env.SCREENSHOT_MAX_HEIGHT, getDisplayHeight()),
   format,
   mediaType: mediaTypeMap[format],
 } as const;

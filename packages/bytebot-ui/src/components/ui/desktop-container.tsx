@@ -6,6 +6,7 @@ import {
   VirtualDesktopStatusHeader,
   VirtualDesktopStatus,
 } from "@/components/VirtualDesktopStatusHeader";
+import { getDisplayWidth, getDisplayHeight } from "@bytebot/shared";
 
 interface DesktopContainerProps {
   children?: React.ReactNode;
@@ -45,9 +46,11 @@ export const DesktopContainer: React.FC<DesktopContainerProps> = ({
         containerRef.current.parentElement?.offsetHeight ||
         containerRef.current.offsetHeight;
 
-      // Calculate the maximum size while maintaining 1280:960 aspect ratio
+      // Calculate the maximum size while maintaining configured aspect ratio
       let width, height;
-      const aspectRatio = 1280 / 960;
+      const displayWidth = getDisplayWidth();
+      const displayHeight = getDisplayHeight();
+      const aspectRatio = displayWidth / displayHeight;
 
       if (parentWidth / parentHeight > aspectRatio) {
         // Width is the limiting factor
@@ -60,8 +63,8 @@ export const DesktopContainer: React.FC<DesktopContainerProps> = ({
       }
 
       // Cap at maximum dimensions
-      width = Math.min(width, 1280);
-      height = Math.min(height, 960);
+      width = Math.min(width, displayWidth);
+      height = Math.min(height, displayHeight);
 
       setContainerSize({ width, height });
     };

@@ -6,7 +6,7 @@ import {
   UnauthorizedError,
   NetworkError,
   RateLimitError,
-  NotFoundError
+  NotFoundError,
 } from '../shared/errors';
 
 const execAsync = promisify(exec);
@@ -15,7 +15,7 @@ const execAsync = promisify(exec);
 export class ApiKeysService {
   private readonly supportedProviders = [
     'ANTHROPIC',
-    'OPENAI', 
+    'OPENAI',
     'GEMINI',
     'OPENROUTER',
     'MISTRAL',
@@ -24,7 +24,7 @@ export class ApiKeysService {
     'PERPLEXITY',
     'TOGETHER',
     'DEEPSEEK',
-    'FIREWORKS'
+    'FIREWORKS',
   ];
 
   async saveApiKeys(apiKeys: Record<string, string>): Promise<void> {
@@ -34,7 +34,7 @@ export class ApiKeysService {
       if (!this.supportedProviders.includes(normalizedProvider)) {
         throw new ValidationError(`Unsupported provider: ${provider}`);
       }
-      
+
       // Basic validation for API key format
       if (apiKey && typeof apiKey === 'string') {
         // Set environment variables for the process and potentially the system
@@ -46,25 +46,27 @@ export class ApiKeysService {
 
   async getApiKeyStatus(): Promise<Record<string, boolean>> {
     const status: Record<string, boolean> = {};
-    
+
     // Check which API keys are configured (without exposing their values)
     const providerMap = {
-      'anthropicApiKey': 'ANTHROPIC_API_KEY',
-      'openaiApiKey': 'OPENAI_API_KEY',
-      'geminiApiKey': 'GEMINI_API_KEY',
-      'openrouterApiKey': 'OPENROUTER_API_KEY',
-      'mistralApiKey': 'MISTRAL_API_KEY',
-      'cohereApiKey': 'COHERE_API_KEY',
-      'groqApiKey': 'GROQ_API_KEY',
-      'perplexityApiKey': 'PERPLEXITY_API_KEY',
-      'togetherApiKey': 'TOGETHER_API_KEY',
-      'deepseekApiKey': 'DEEPSEEK_API_KEY',
-      'fireworksApiKey': 'FIREWORKS_API_KEY'
+      anthropicApiKey: 'ANTHROPIC_API_KEY',
+      openaiApiKey: 'OPENAI_API_KEY',
+      geminiApiKey: 'GEMINI_API_KEY',
+      openrouterApiKey: 'OPENROUTER_API_KEY',
+      mistralApiKey: 'MISTRAL_API_KEY',
+      cohereApiKey: 'COHERE_API_KEY',
+      groqApiKey: 'GROQ_API_KEY',
+      perplexityApiKey: 'PERPLEXITY_API_KEY',
+      togetherApiKey: 'TOGETHER_API_KEY',
+      deepseekApiKey: 'DEEPSEEK_API_KEY',
+      fireworksApiKey: 'FIREWORKS_API_KEY',
     };
 
     for (const [frontendKey, envVar] of Object.entries(providerMap)) {
       // Check if environment variable exists and is not empty
-      status[frontendKey] = !!(process.env[envVar] && process.env[envVar].trim().length > 0);
+      status[frontendKey] = !!(
+        process.env[envVar] && process.env[envVar].trim().length > 0
+      );
     }
 
     return status;
@@ -72,7 +74,7 @@ export class ApiKeysService {
 
   async testApiKey(provider: string, apiKey: string): Promise<any> {
     const normalizedProvider = provider.toUpperCase().replace(/[^A-Z]/g, '');
-    
+
     if (!this.supportedProviders.includes(normalizedProvider)) {
       throw new ValidationError(`Unsupported provider: ${provider}`);
     }
@@ -120,20 +122,26 @@ export class ApiKeysService {
       }
 
       if (!response.ok) {
-        throw new NetworkError(`API test failed with status ${response.status}: ${response.statusText}`);
+        throw new NetworkError(
+          `API test failed with status ${response.status}: ${response.statusText}`,
+        );
       }
 
       return await response.json();
     } catch (error) {
-      if (error instanceof ValidationError || error instanceof UnauthorizedError || 
-          error instanceof RateLimitError || error instanceof NetworkError) {
+      if (
+        error instanceof ValidationError ||
+        error instanceof UnauthorizedError ||
+        error instanceof RateLimitError ||
+        error instanceof NetworkError
+      ) {
         throw error; // Re-throw our custom errors
       }
-      
+
       if (error.name === 'AbortError') {
         throw new NetworkError('Request timeout - API key test took too long');
       }
-      
+
       // For other network/fetch errors
       throw new NetworkError(`Failed to test API key: ${error.message}`);
     } finally {
@@ -149,19 +157,19 @@ export class ApiKeysService {
   private getTestModelForProvider(provider: string): string {
     // Simple model mapping for testing purposes
     const modelMap: Record<string, string> = {
-      'ANTHROPIC': 'claude-3-5-sonnet-20241022',
-      'OPENAI': 'gpt-4',
-      'GEMINI': 'gemini-2.5-pro',
-      'OPENROUTER': 'openrouter-auto',
-      'MISTRAL': 'mistral-large',
-      'COHERE': 'command-r-plus',
-      'GROQ': 'groq-llama-3.1-70b',
-      'PERPLEXITY': 'pplx-sonar-medium',
-      'TOGETHER': 'together-llama-3-70b',
-      'DEEPSEEK': 'deepseek-chat',
-      'FIREWORKS': 'fireworks-llama-v3p1-405b'
+      ANTHROPIC: 'claude-3-5-sonnet-20241022',
+      OPENAI: 'gpt-4',
+      GEMINI: 'gemini-2.5-pro',
+      OPENROUTER: 'openrouter-auto',
+      MISTRAL: 'mistral-large',
+      COHERE: 'command-r-plus',
+      GROQ: 'groq-llama-3.1-70b',
+      PERPLEXITY: 'pplx-sonar-medium',
+      TOGETHER: 'together-llama-3-70b',
+      DEEPSEEK: 'deepseek-chat',
+      FIREWORKS: 'fireworks-llama-v3p1-405b',
     };
-    
+
     return modelMap[provider] || 'gpt-4'; // Default fallback
   }
 }

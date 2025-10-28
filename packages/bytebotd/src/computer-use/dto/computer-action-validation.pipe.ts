@@ -31,6 +31,9 @@ export class ComputerActionValidationPipe implements PipeTransform {
     if (!value || !value.action) {
       throw new BadRequestException('Missing action field');
     }
+    if (!value || !value.action) {
+      throw new BadRequestException('Missing action field');
+    }
 
     let dto;
     switch (value.action) {

@@ -13,6 +13,21 @@ import { spawn } from 'child_process';
 import * as path from 'path';
 
 /**
+ * Converts an environment variable string to a number with fallback.
+ * @param value Environment variable value
+ * @param fallback Default value if conversion fails
+ * @returns Parsed number or fallback
+ */
+const toNumber = (value: string | undefined, fallback: number): number => {
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+/**
  * Enum representing key codes supported by nut-js.
  * Maps to the same structure as QKeyCode for compatibility.
  */
@@ -123,8 +138,8 @@ export class NutService {
 
   constructor() {
     // Initialize nut-js settings
-    mouse.config.autoDelayMs = 100;
-    keyboard.config.autoDelayMs = 100;
+    mouse.config.autoDelayMs = toNumber(process.env.MOUSE_AUTO_DELAY_MS, 300);
+    keyboard.config.autoDelayMs = toNumber(process.env.KEYBOARD_AUTO_DELAY_MS, 100);
 
     // Create screenshot directory if it doesn't exist
     this.screenshotDir = path.join('/tmp', 'bytebot-screenshots');
@@ -353,31 +368,48 @@ export class NutService {
    */
   async mouseMoveEvent({ x, y }: { x: number; y: number }): Promise<any> {
     this.logger.log(`Moving mouse to coordinates: (${x}, ${y})`);
+    this.logger.debug(`[DEBUG] mouseMoveEvent called with coords: ${x}, ${y}`);
     try {
       const point = new Point(x, y);
       await mouse.setPosition(point);
+      this.logger.debug(`[DEBUG] mouseMoveEvent completed successfully`);
       return { success: true };
     } catch (error) {
+      this.logger.error(`[DEBUG] mouseMoveEvent failed: ${error.message}`);
       throw new Error(`Failed to move mouse: ${error.message}`);
     }
   }
 
   async mouseClickEvent(button: 'left' | 'right' | 'middle'): Promise<any> {
     this.logger.log(`Clicking mouse button: ${button}`);
+    this.logger.debug(`[DEBUG] mouseClickEvent called with button: ${button}`);
     try {
+      let nutButton: Button;
       switch (button) {
         case 'left':
-          await mouse.click(Button.LEFT);
+          nutButton = Button.LEFT;
+          this.logger.debug(`[CLICK DEBUG] Using nut-js LEFT button`);
           break;
         case 'right':
-          await mouse.click(Button.RIGHT);
+          nutButton = Button.RIGHT;
+          this.logger.debug(`[CLICK DEBUG] Using nut-js RIGHT button`);
           break;
         case 'middle':
-          await mouse.click(Button.MIDDLE);
+          nutButton = Button.MIDDLE;
+          this.logger.debug(`[CLICK DEBUG] Using nut-js MIDDLE button`);
           break;
+        default:
+          this.logger.error(`[CLICK DEBUG] Invalid button: ${button}`);
+          throw new Error(`Invalid button type: ${button}`);
       }
+
+      this.logger.debug(`[CLICK DEBUG] About to call mouse.click with button: ${nutButton}`);
+      await mouse.click(nutButton);
+      this.logger.debug(`[CLICK DEBUG] mouse.click completed successfully`);
       return { success: true };
     } catch (error) {
+      this.logger.error(`[DEBUG] mouseClickEvent failed: ${error.message}`);
+      this.logger.error(`[CLICK DEBUG] mouse.click threw error: ${error.message}`);
       throw new Error(`Failed to click mouse button: ${error.message}`);
     }
   }
@@ -502,11 +534,14 @@ export class NutService {
 
   async getCursorPosition(): Promise<{ x: number; y: number }> {
     this.logger.log(`Getting cursor position`);
+    this.logger.debug(`[DEBUG] getCursorPosition called`);
     try {
       const position = await mouse.getPosition();
+      this.logger.debug(`[DEBUG] getCursorPosition returned: ${position.x}, ${position.y}`);
       return { x: position.x, y: position.y };
     } catch (error) {
       this.logger.error(`Error getting cursor position: ${error.message}`);
+      this.logger.error(`[DEBUG] getCursorPosition failed: ${error.message}`);
       throw error;
     }
   }

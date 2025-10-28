@@ -231,9 +231,26 @@ export default function Home() {
 
     setIsUpdatingControl(true);
     try {
-      const updatedTask = nextMode
-        ? await takeOverTask(activeTaskId)
-        : await resumeTask(activeTaskId);
+      let updatedTask;
+
+      if (nextMode) {
+        // Taking over control
+        console.log("Taking over control of task:", activeTaskId);
+        updatedTask = await takeOverTask(activeTaskId);
+      } else {
+        // Switching to view-only - only resume if task is not in terminal state
+        if (taskStatus === TaskStatus.CANCELLED ||
+            taskStatus === TaskStatus.COMPLETED ||
+            taskStatus === TaskStatus.FAILED) {
+          // Task is already finished, just update UI state
+          console.log("Task is in terminal state, not resuming:", taskStatus);
+          updatedTask = activeTask;
+        } else {
+          // Task is still active, call resume to hand back control
+          console.log("Resuming task (handing back control):", activeTaskId);
+          updatedTask = await resumeTask(activeTaskId);
+        }
+      }
 
       if (!updatedTask) {
         throw new Error("No response from server");
@@ -253,7 +270,7 @@ export default function Home() {
     } finally {
       setIsUpdatingControl(false);
     }
-  }, [activeTaskId, isInteractive]);
+  }, [activeTaskId, isInteractive, taskStatus, activeTask]);
 
   const handleSend = async () => {
     if (!input.trim()) return;

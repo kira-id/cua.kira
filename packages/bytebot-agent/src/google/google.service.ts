@@ -178,11 +178,11 @@ export class GoogleService implements BytebotAgentService, BaseProvider {
             case MessageContentType.ToolResult: {
               const textOutputs = block.content
                 .filter((content) => content.type === MessageContentType.Text)
-                .map((content) => (content as TextContentBlock).text)
+                .map((content) => content.text)
                 .filter((text) => text.trim().length > 0);
               const imageContents = block.content.filter(
                 (content) => content.type === MessageContentType.Image,
-              ) as ImageContentBlock[];
+              );
 
               const aggregatedText = textOutputs.join('\n').trim();
               const responsePayload: Record<string, unknown> = {};
@@ -308,7 +308,13 @@ export class GoogleService implements BytebotAgentService, BaseProvider {
     useTools: boolean,
     signal?: AbortSignal,
   ): Promise<BytebotAgentResponse> {
-    return this.generateMessage(systemPrompt, messages, model, useTools, signal);
+    return this.generateMessage(
+      systemPrompt,
+      messages,
+      model,
+      useTools,
+      signal,
+    );
   }
 
   async healthCheck(): Promise<boolean> {
@@ -334,6 +340,6 @@ export class GoogleService implements BytebotAgentService, BaseProvider {
   async getAvailableModels(): Promise<string[]> {
     // Google doesn't provide a direct API to list models
     // Return the models we know are available
-    return GOOGLE_MODELS.map(model => model.name);
+    return GOOGLE_MODELS.map((model) => model.name);
   }
 }

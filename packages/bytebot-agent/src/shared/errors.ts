@@ -4,15 +4,15 @@
 
 export abstract class AppError extends Error {
   public readonly isAppError = true;
-  
+
   constructor(
     message: string,
     public readonly statusCode: number,
-    public readonly errorCode: string
+    public readonly errorCode: string,
   ) {
     super(message);
     this.name = this.constructor.name;
-    
+
     // Maintains proper stack trace for where our error was thrown (only available on V8)
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, this.constructor);
@@ -64,7 +64,9 @@ export class ConfigurationError extends AppError {
 
 // Type guard to check if an error is one of our custom app errors
 export function isAppError(error: unknown): error is AppError {
-  return error instanceof Error && 'isAppError' in error && error.isAppError === true;
+  return (
+    error instanceof Error && 'isAppError' in error && error.isAppError === true
+  );
 }
 
 // Helper function to determine if an error should be retried

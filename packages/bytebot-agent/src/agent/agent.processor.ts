@@ -40,6 +40,7 @@ import {
 import { SummariesService } from '../summaries/summaries.service';
 import { handleComputerToolUse } from './agent.computer-use';
 import { ProxyService } from '../proxy/proxy.service';
+import { isRetryableError, RateLimitError } from '../shared/errors';
 
 @Injectable()
 export class AgentProcessor {
@@ -186,8 +187,11 @@ export class AgentProcessor {
       );
 
       const model = task.model as unknown as BytebotAgentModel;
-      let agentResponse: BytebotAgentResponse;
+      let agentResponse: BytebotAgentResponse | undefined;
+      let retryCount = 0;
+      const maxRetries = 3;
 
+      this.logger.log(`Using provider: ${model.provider} for task ${taskId}`);
       const service = this.services[model.provider];
       if (!service) {
         this.logger.warn(
@@ -201,13 +205,51 @@ export class AgentProcessor {
         return;
       }
 
-      agentResponse = await service.generateMessage(
-        AGENT_SYSTEM_PROMPT,
-        messages,
-        model.name,
-        true,
-        this.abortController.signal,
-      );
+      while (retryCount <= maxRetries) {
+        try {
+          agentResponse = await service.generateMessage(
+            AGENT_SYSTEM_PROMPT,
+            messages,
+            model.name,
+            true,
+            this.abortController.signal,
+          );
+          break; // Success, exit retry loop
+        } catch (error: any) {
+          const isRateLimit = error instanceof RateLimitError;
+          const shouldRetry =
+            isRetryableError(error) && retryCount < maxRetries;
+
+          this.logger.error(
+            `Error from provider ${model.provider} for task ${taskId} (attempt ${retryCount + 1}/${maxRetries + 1}): ${error.message}`,
+            {
+              provider: model.provider,
+              model: model.name,
+              taskId,
+              errorType: error.constructor.name,
+              isRateLimit,
+              willRetry: shouldRetry,
+              stack: error.stack,
+            },
+          );
+
+          if (!shouldRetry) {
+            throw error;
+          }
+
+          // Exponential backoff: base delay of 2 seconds, exponential increase
+          const delayMs = Math.min(2000 * Math.pow(2, retryCount), 30000); // Max 30 seconds
+          this.logger.log(`Retrying in ${delayMs}ms due to rate limit...`);
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          retryCount++;
+        }
+      }
+
+      if (!agentResponse) {
+        throw new Error(
+          'Failed to get response from LLM service after all retries',
+        );
+      }
 
       const messageContentBlocks = agentResponse.contentBlocks;
 

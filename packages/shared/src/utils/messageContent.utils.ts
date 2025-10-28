@@ -29,6 +29,7 @@ import {
   ReadFileToolUseBlock,
   UserActionContentBlock,
 } from "../types/messageContent.types";
+import { Coordinates } from "../types/computerAction.types";
 
 /**
  * Type guard to check if an object is a TextContentBlock
@@ -512,4 +513,27 @@ export function isReadFileToolUseBlock(
 
   const block = obj as Record<string, any>;
   return block.name === "computer_read_file";
+}
+
+/**
+ * Normalizes coordinates from either array [x, y] or object {x, y} format
+ * to the expected Coordinates object format.
+ */
+export function normalizeCoordinates(coordinates: Coordinates | [number, number] | undefined): Coordinates | undefined {
+  if (!coordinates) {
+    return undefined;
+  }
+
+  // If it's already an object with x,y properties
+  if (typeof coordinates === 'object' && 'x' in coordinates && 'y' in coordinates) {
+    return coordinates as Coordinates;
+  }
+
+  // If it's an array [x, y]
+  if (Array.isArray(coordinates) && coordinates.length === 2) {
+    return { x: coordinates[0], y: coordinates[1] };
+  }
+
+  // Invalid format
+  return undefined;
 }

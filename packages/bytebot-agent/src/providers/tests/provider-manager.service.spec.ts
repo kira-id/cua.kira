@@ -28,10 +28,10 @@ describe('ProviderManagerService', () => {
           useValue: {
             get: jest.fn((key: string) => {
               const mockConfig = {
-                'ANTHROPIC_API_KEY': 'test-anthropic-key',
-                'OPENAI_API_KEY': '',
-                'GEMINI_API_KEY': 'test-gemini-key',
-                'OPENROUTER_API_KEY': 'test-openrouter-key',
+                ANTHROPIC_API_KEY: 'test-anthropic-key',
+                OPENAI_API_KEY: '',
+                GEMINI_API_KEY: 'test-gemini-key',
+                OPENROUTER_API_KEY: 'test-openrouter-key',
               };
               return mockConfig[key];
             }),
@@ -72,16 +72,21 @@ describe('ProviderManagerService', () => {
     it('should return all provider configurations', () => {
       const providers = service.getAvailableProviders();
       expect(providers).toHaveLength(4);
-      expect(providers.map(p => p.id)).toEqual(['anthropic', 'openai', 'google', 'openrouter']);
+      expect(providers.map((p) => p.id)).toEqual([
+        'anthropic',
+        'openai',
+        'google',
+        'openrouter',
+      ]);
     });
 
     it('should correctly set enabled status based on API keys', () => {
       const providers = service.getAvailableProviders();
-      
-      const anthropic = providers.find(p => p.id === 'anthropic');
-      const openai = providers.find(p => p.id === 'openai');
-      const google = providers.find(p => p.id === 'google');
-      const openrouter = providers.find(p => p.id === 'openrouter');
+
+      const anthropic = providers.find((p) => p.id === 'anthropic');
+      const openai = providers.find((p) => p.id === 'openai');
+      const google = providers.find((p) => p.id === 'google');
+      const openrouter = providers.find((p) => p.id === 'openrouter');
 
       expect(anthropic?.isEnabled).toBe(true);
       expect(openai?.isEnabled).toBe(false);
@@ -94,7 +99,11 @@ describe('ProviderManagerService', () => {
     it('should return only enabled providers', () => {
       const enabledProviders = service.getEnabledProviders();
       expect(enabledProviders).toHaveLength(3);
-      expect(enabledProviders.map(p => p.id)).toEqual(['anthropic', 'google', 'openrouter']);
+      expect(enabledProviders.map((p) => p.id)).toEqual([
+        'anthropic',
+        'google',
+        'openrouter',
+      ]);
     });
   });
 
@@ -114,9 +123,9 @@ describe('ProviderManagerService', () => {
     it('should return models from all enabled providers', () => {
       const models = service.getAllAvailableModels();
       expect(models.length).toBeGreaterThan(0);
-      
+
       // Should include models from anthropic, google, and openrouter (but not openai)
-      const providers = [...new Set(models.map(m => m.provider))];
+      const providers = [...new Set(models.map((m) => m.provider))];
       expect(providers).toContain('anthropic');
       expect(providers).toContain('google');
       expect(providers).toContain('openrouter');

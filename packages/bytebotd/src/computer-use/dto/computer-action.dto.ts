@@ -58,16 +58,17 @@ export class ClickMouseActionDto extends BaseActionDto {
   coordinates?: CoordinatesDto;
 
   @IsEnum(ButtonType)
-  button: ButtonType;
+  button: ButtonType = ButtonType.LEFT;
 
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   holdKeys?: string[];
 
+  @IsOptional()
   @IsNumber()
   @Min(1)
-  clickCount: number;
+  clickCount?: number;
 }
 
 export class PressMouseActionDto extends BaseActionDto {

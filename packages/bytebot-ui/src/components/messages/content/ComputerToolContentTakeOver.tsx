@@ -10,6 +10,7 @@ import {
   isCursorPositionToolUseBlock,
 } from "@bytebot/shared";
 import { getIcon, getLabel } from "./ComputerToolUtils";
+import { normalizeCoordinates } from "@bytebot/shared";
 
 interface ComputerToolContentTakeOverProps {
   block: ComputerToolUseContentBlock;
@@ -45,13 +46,14 @@ function ToolDetailsTakeOver({ block }: { block: ComputerToolUseContentBlock }) 
       )}
       
       {/* Coordinates for click/mouse actions */}
-      {block.input.coordinates && (
-        <p className={baseClasses}>
-          {(block.input.coordinates as { x: number; y: number }).x},
-          {" "}
-          {(block.input.coordinates as { x: number; y: number }).y}
-        </p>
-      )}
+      {(() => {
+        const normalized = normalizeCoordinates(block.input.coordinates);
+        return normalized ? (
+          <p className={baseClasses}>
+            {normalized.x}, {normalized.y}
+          </p>
+        ) : null;
+      })()}
       
       {/* Start and end coordinates for path actions */}
       {"path" in block.input &&
@@ -60,9 +62,14 @@ function ToolDetailsTakeOver({ block }: { block: ComputerToolUseContentBlock }) 
           (point) => point.x !== undefined && point.y !== undefined,
         ) && (
           <p className={baseClasses}>
-            From: {block.input.path[0].x}, {block.input.path[0].y} → To:{" "}
-            {block.input.path[block.input.path.length - 1].x},{" "}
-            {block.input.path[block.input.path.length - 1].y}
+            From: {(() => {
+              const start = normalizeCoordinates(block.input.path[0]);
+              return start ? `${start.x}, ${start.y}` : 'unknown';
+            })()} → To:{" "}
+            {(() => {
+              const end = normalizeCoordinates(block.input.path[block.input.path.length - 1]);
+              return end ? `${end.x}, ${end.y}` : 'unknown';
+            })()}
           </p>
         )}
       

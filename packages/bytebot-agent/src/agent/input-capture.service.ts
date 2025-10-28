@@ -58,10 +58,7 @@ export class InputCaptureService {
 
     this.socket.on(
       'screenshotAndAction',
-      async (
-        shot: { image: string; mediaType?: string },
-        action: any,
-      ) => {
+      async (shot: { image: string; mediaType?: string }, action: any) => {
         if (!this.capturing || !taskId) return;
         // The gateway only sends a click_mouse or drag_mouse action together with screenshots for now.
         if (action.action !== 'click_mouse' && action.action !== 'drag_mouse')

@@ -201,7 +201,13 @@ export class AnthropicService implements BytebotAgentService, BaseProvider {
     useTools: boolean,
     signal?: AbortSignal,
   ): Promise<BytebotAgentResponse> {
-    return this.generateMessage(systemPrompt, messages, model, useTools, signal);
+    return this.generateMessage(
+      systemPrompt,
+      messages,
+      model,
+      useTools,
+      signal,
+    );
   }
 
   async healthCheck(): Promise<boolean> {
@@ -227,6 +233,6 @@ export class AnthropicService implements BytebotAgentService, BaseProvider {
   async getAvailableModels(): Promise<string[]> {
     // Anthropic doesn't provide a direct API to list models
     // Return the models we know are available
-    return ANTHROPIC_MODELS.map(model => model.name);
+    return ANTHROPIC_MODELS.map((model) => model.name);
   }
 }

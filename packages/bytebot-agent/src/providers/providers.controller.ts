@@ -1,5 +1,8 @@
 import { Controller, Get, Param, Post } from '@nestjs/common';
-import { ProviderManagerService, ProviderConfig } from './provider-manager.service';
+import {
+  ProviderManagerService,
+  ProviderConfig,
+} from './provider-manager.service';
 import { BytebotAgentModel } from '../agent/agent.types';
 
 @Controller('providers')
@@ -22,7 +25,9 @@ export class ProvidersController {
   }
 
   @Get(':providerId/models')
-  getProviderModels(@Param('providerId') providerId: string): BytebotAgentModel[] {
+  getProviderModels(
+    @Param('providerId') providerId: string,
+  ): BytebotAgentModel[] {
     return this.providerManager.getModelsForProvider(providerId);
   }
 
@@ -32,7 +37,9 @@ export class ProvidersController {
   }
 
   @Post(':providerId/test')
-  async testProvider(@Param('providerId') providerId: string): Promise<{ success: boolean }> {
+  async testProvider(
+    @Param('providerId') providerId: string,
+  ): Promise<{ success: boolean }> {
     const success = await this.providerManager.testProvider(providerId);
     return { success };
   }

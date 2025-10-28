@@ -49,13 +49,16 @@ describe('OpenRouterService', () => {
 
       const result = await service.healthCheck();
       expect(result).toBe(true);
-      expect(fetch).toHaveBeenCalledWith('https://openrouter.ai/api/v1/models', {
-        headers: {
-          Authorization: 'Bearer test-api-key',
-          'HTTP-Referer': 'https://kira.id',
-          'X-Title': 'Bytebot Agent',
+      expect(fetch).toHaveBeenCalledWith(
+        'https://openrouter.ai/api/v1/models',
+        {
+          headers: {
+            Authorization: 'Bearer test-api-key',
+            'HTTP-Referer': 'https://kira.id',
+            'X-Title': 'Bytebot Agent',
+          },
         },
-      });
+      );
     });
 
     it('should return false when API is not accessible', async () => {
@@ -78,10 +81,7 @@ describe('OpenRouterService', () => {
   describe('getAvailableModels', () => {
     it('should return list of available models', async () => {
       const mockModels = {
-        data: [
-          { id: 'anthropic/claude-3.5-sonnet' },
-          { id: 'openai/gpt-4' },
-        ],
+        data: [{ id: 'anthropic/claude-3.5-sonnet' }, { id: 'openai/gpt-4' }],
       };
 
       (fetch as jest.Mock).mockResolvedValueOnce({
@@ -344,11 +344,15 @@ describe('OpenRouterService', () => {
 
       expect(fetch).toHaveBeenCalledTimes(2);
 
-      const firstCallBody = JSON.parse((fetch as jest.Mock).mock.calls[0][1].body);
+      const firstCallBody = JSON.parse(
+        (fetch as jest.Mock).mock.calls[0][1].body,
+      );
       expect(firstCallBody.tool_choice).toBe('auto');
       expect(firstCallBody.tools).toBeDefined();
 
-      const secondCallBody = JSON.parse((fetch as jest.Mock).mock.calls[1][1].body);
+      const secondCallBody = JSON.parse(
+        (fetch as jest.Mock).mock.calls[1][1].body,
+      );
       expect(secondCallBody.tool_choice).toBeUndefined();
       expect(secondCallBody.tools).toBeUndefined();
 

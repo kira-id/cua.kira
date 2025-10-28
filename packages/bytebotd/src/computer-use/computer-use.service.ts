@@ -71,6 +71,17 @@ export class ComputerUseService {
 
   async action(params: ComputerAction): Promise<any> {
     this.logger.log(`Executing computer action: ${params.action}`);
+    this.logger.debug(`[DEBUG] Computer action input: ${JSON.stringify(params, null, 2)}`);
+
+    // Log detailed input for click_mouse actions
+    if (params.action === 'click_mouse') {
+      const clickParams = params as ClickMouseAction;
+      this.logger.log(`[CLICK DEBUG] Click mouse action details:`);
+      this.logger.log(`[CLICK DEBUG] - coordinates: ${clickParams.coordinates ? `(${clickParams.coordinates.x}, ${clickParams.coordinates.y})` : 'none'}`);
+      this.logger.log(`[CLICK DEBUG] - button: ${clickParams.button}`);
+      this.logger.log(`[CLICK DEBUG] - holdKeys: ${clickParams.holdKeys ? clickParams.holdKeys.join(', ') : 'none'}`);
+      this.logger.log(`[CLICK DEBUG] - clickCount: ${clickParams.clickCount}`);
+    }
 
     switch (params.action) {
       case 'move_mouse': {
@@ -173,33 +184,50 @@ export class ComputerUseService {
 
   private async clickMouse(action: ClickMouseAction): Promise<void> {
     const { coordinates, button, holdKeys, clickCount } = action;
+    this.logger.debug(`[CLICK DEBUG] Original clickCount: ${clickCount}`);
+    // Ensure clickCount is at least 1, default to 1 if undefined or invalid
+    const safeClickCount = typeof clickCount === 'number' && clickCount >= 1 ? clickCount : 1;
+    this.logger.debug(`[CLICK DEBUG] Safe clickCount: ${safeClickCount}`);
 
-    // Move to coordinates if provided
+    // Validate and log coordinates
     if (coordinates) {
+      this.logger.debug(`[CLICK DEBUG] Coordinates provided: x=${coordinates.x}, y=${coordinates.y}`);
+      if (isNaN(coordinates.x) || isNaN(coordinates.y)) {
+        this.logger.warn(`[CLICK DEBUG] Invalid coordinates: x=${coordinates.x}, y=${coordinates.y}`);
+        throw new Error(`Invalid coordinates for mouse click: (${coordinates.x}, ${coordinates.y})`);
+      }
       await this.nutService.mouseMoveEvent(coordinates);
+      this.logger.debug(`[CLICK DEBUG] Mouse moved to coordinates`);
+    } else {
+      this.logger.debug(`[CLICK DEBUG] No coordinates provided, using current position`);
     }
 
     // Hold keys if provided
     if (holdKeys) {
+      this.logger.debug(`[CLICK DEBUG] Holding keys: ${holdKeys.join(', ')}`);
       await this.nutService.holdKeys(holdKeys, true);
     }
 
     // Perform clicks
-    if (clickCount > 1) {
+    if (safeClickCount > 1) {
+      this.logger.debug(`[CLICK DEBUG] Performing ${safeClickCount} clicks`);
       // Perform multiple clicks
-      for (let i = 0; i < clickCount; i++) {
+      for (let i = 0; i < safeClickCount; i++) {
         await this.nutService.mouseClickEvent(button);
         await this.delay(150);
       }
     } else {
+      this.logger.debug(`[CLICK DEBUG] Performing single click with button: ${button}`);
       // Perform a single click
       await this.nutService.mouseClickEvent(button);
     }
 
     // Release hold keys
     if (holdKeys) {
+      this.logger.debug(`[CLICK DEBUG] Releasing keys: ${holdKeys.join(', ')}`);
       await this.nutService.holdKeys(holdKeys, false);
     }
+    this.logger.debug(`[CLICK DEBUG] Click action completed`);
   }
 
   private async pressMouse(action: PressMouseAction): Promise<void> {

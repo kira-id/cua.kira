@@ -33,7 +33,7 @@ describe('ProvidersController (Integration)', () => {
         .expect((res) => {
           expect(Array.isArray(res.body)).toBe(true);
           expect(res.body.length).toBeGreaterThan(0);
-          
+
           const provider = res.body[0];
           expect(provider).toHaveProperty('id');
           expect(provider).toHaveProperty('name');
@@ -66,7 +66,7 @@ describe('ProvidersController (Integration)', () => {
         .expect(200)
         .expect((res) => {
           expect(Array.isArray(res.body)).toBe(true);
-          
+
           if (res.body.length > 0) {
             const model = res.body[0];
             expect(model).toHaveProperty('provider');
@@ -100,7 +100,7 @@ describe('ProvidersController (Integration)', () => {
         .expect(200)
         .expect((res) => {
           expect(Array.isArray(res.body)).toBe(true);
-          
+
           res.body.forEach((model: any) => {
             expect(model.provider).toBe('anthropic');
             expect(model).toHaveProperty('name');

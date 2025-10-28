@@ -1,6 +1,8 @@
+import { getDisplayWidth, getDisplayHeight } from '@bytebot/shared';
+
 export const DEFAULT_DISPLAY_SIZE = {
-  width: 1280,
-  height: 960,
+  width: getDisplayWidth(),
+  height: getDisplayHeight(),
 };
 
 export const SUMMARIZATION_SYSTEM_PROMPT = `You are a helpful assistant that summarizes conversations for long-running tasks.

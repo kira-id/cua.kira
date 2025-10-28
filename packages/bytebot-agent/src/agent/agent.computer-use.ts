@@ -22,6 +22,7 @@ import {
   isReadFileToolUseBlock,
   ImageMediaType,
   getDesktopBaseUrl,
+  normalizeCoordinates,
 } from '@bytebot/shared';
 import { Logger } from '@nestjs/common';
 
@@ -66,10 +67,7 @@ function extractErrorCode(error: unknown): string | undefined {
   return undefined;
 }
 
-function formatComputerToolError(
-  toolName: string,
-  error: unknown,
-): string {
+function formatComputerToolError(toolName: string, error: unknown): string {
   const errorMessage =
     error instanceof Error ? error.message : String(error ?? 'Unknown error');
   const baseMessage = `Error executing ${toolName} tool: ${errorMessage}`;
@@ -102,7 +100,10 @@ function formatComputerToolError(
     }
   }
 
-  if (/fetch failed/i.test(errorMessage) || /Failed to fetch/i.test(errorMessage)) {
+  if (
+    /fetch failed/i.test(errorMessage) ||
+    /Failed to fetch/i.test(errorMessage)
+  ) {
     const baseUrl = safeDesktopBaseUrl();
     if (baseUrl) {
       return (
@@ -139,6 +140,10 @@ export async function handleComputerToolUse(
   logger.debug(
     `Handling computer tool use: ${block.name}, tool_use_id: ${block.id}`,
   );
+
+  // Debug: Log the tool being handled
+  logger.debug(`[DEBUG] Computer tool handler called for tool: ${block.name}`);
+  logger.debug(`[DEBUG] Tool input: ${JSON.stringify(block.input, null, 2)}`);
 
   if (isScreenshotToolUseBlock(block)) {
     logger.debug('Processing screenshot request');
@@ -221,7 +226,12 @@ export async function handleComputerToolUse(
       await traceMouse(block.input);
     }
     if (isClickMouseToolUseBlock(block)) {
-      await clickMouse(block.input);
+      // Normalize coordinates from potential array format
+      const normalizedInput = {
+        ...block.input,
+        coordinates: normalizeCoordinates(block.input.coordinates),
+      };
+      await clickMouse(normalizedInput);
     }
     if (isPressMouseToolUseBlock(block)) {
       await pressMouse(block.input);
@@ -396,11 +406,14 @@ async function clickMouse(input: {
   coordinates?: Coordinates;
   button: Button;
   holdKeys?: string[];
-  clickCount: number;
+  clickCount?: number;
 }): Promise<void> {
   const { coordinates, button, holdKeys, clickCount } = input;
+  // Ensure clickCount is at least 1, default to 1 if undefined or invalid
+  const safeClickCount =
+    typeof clickCount === 'number' && clickCount >= 1 ? clickCount : 1;
   console.log(
-    `Clicking mouse ${button} ${clickCount} times ${coordinates ? `at coordinates: [${coordinates.x}, ${coordinates.y}] ` : ''} ${holdKeys ? `with holdKeys: ${holdKeys}` : ''}`,
+    `Clicking mouse ${button} ${safeClickCount} times ${coordinates ? `at coordinates: [${coordinates.x}, ${coordinates.y}] ` : ''} ${holdKeys ? `with holdKeys: ${holdKeys}` : ''}`,
   );
 
   try {
@@ -412,7 +425,7 @@ async function clickMouse(input: {
         coordinates,
         button,
         holdKeys: holdKeys && holdKeys.length > 0 ? holdKeys : undefined,
-        clickCount,
+        clickCount: safeClickCount,
       }),
     });
   } catch (error) {
@@ -649,8 +662,7 @@ async function screenshot(): Promise<ScreenshotResult> {
       throw new Error(`Failed to take screenshot: ${response.statusText}`);
     }
 
-    const data: { image?: string; mediaType?: string } =
-      await response.json();
+    const data: { image?: string; mediaType?: string } = await response.json();
 
     if (!data.image) {
       throw new Error('Failed to take screenshot: No image data received');

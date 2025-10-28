@@ -4,13 +4,11 @@
 
 # CUA.kira: Open-Source AI Desktop Agent
 
-> CUA.kira is an actively maintained fork of [Bytebot](https://github.com/bytebot-ai/bytebot). Until dedicated docs ship, many setup links still point to the upstream project.
+CUA.kira is an actively maintained fork of [Bytebot](https://github.com/bytebot-ai/bytebot). Until dedicated docs ship, many setup links still point to the upstream project.
 
-<a href="https://trendshift.io/repositories/14624" target="_blank"><img src="https://trendshift.io/api/badge/repositories/14624" alt="bytebot-ai%2Fbytebot | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+
 
 **An AI that has its own computer to complete tasks for you**
-
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/bytebot?referralCode=L9lKXQ)
 
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://github.com/bytebot-ai/bytebot/tree/main/docker)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)

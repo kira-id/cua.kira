@@ -28,7 +28,7 @@ export function ChatInput({
   onSend,
   onFileUpload,
   minLines = 1,
-  placeholder = "Give Bytebot a task to work on...",
+  placeholder = "Give Kira a task to work on...",
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);

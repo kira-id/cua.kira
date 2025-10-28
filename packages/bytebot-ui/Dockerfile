@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Base image
 FROM node:20-alpine
 

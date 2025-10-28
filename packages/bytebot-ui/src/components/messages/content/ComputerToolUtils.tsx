@@ -127,19 +127,25 @@ export function getLabel(block: ComputerToolUseContentBlock) {
 
   if (isClickMouseToolUseBlock(block)) {
     const button = block.input.button;
+    const clickCount = block.input.clickCount ?? 1; // Ensure clickCount is at least 1
     if (button === "left") {
-      if (block.input.clickCount === 2) {
+      if (clickCount === 2) {
         return "Double Click";
       }
 
-      if (block.input.clickCount === 3) {
+      if (clickCount === 3) {
         return "Triple Click";
       }
 
       return "Click";
     }
 
-    return `${block.input.button?.charAt(0).toUpperCase() + block.input.button?.slice(1)} Click`;
+    // Handle invalid or undefined button values
+    if (!button || typeof button !== "string") {
+      return "Click";
+    }
+
+    return `${button.charAt(0).toUpperCase() + button.slice(1)} Click`;
   }
 
   if (isDragMouseToolUseBlock(block)) {

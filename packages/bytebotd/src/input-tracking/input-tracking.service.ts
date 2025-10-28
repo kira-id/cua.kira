@@ -119,7 +119,7 @@ export class InputTrackingService implements OnModuleDestroy {
         action: 'click_mouse',
         button: this.mapButton(e.button),
         coordinates: { x: e.x, y: e.y },
-        clickCount: e.clicks,
+        clickCount: e.clicks || 1, // Ensure clickCount is at least 1
         holdKeys: [
           e.altKey ? 'alt' : undefined,
           e.ctrlKey ? 'ctrl' : undefined,
@@ -135,7 +135,7 @@ export class InputTrackingService implements OnModuleDestroy {
       this.clickMouseActionTimeout = setTimeout(async () => {
         // pick the event with the largest clickCount in the burst
         const final = this.clickMouseActionBuffer.reduce((a, b) =>
-          b.clickCount > a.clickCount ? b : a,
+          (b.clickCount || 1) > (a.clickCount || 1) ? b : a,
         );
         await this.logAction(final); // emit exactly once
 

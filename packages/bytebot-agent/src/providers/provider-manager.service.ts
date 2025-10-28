@@ -28,7 +28,8 @@ export class ProviderManagerService {
     {
       id: 'anthropic',
       name: 'Anthropic Claude',
-      description: 'Advanced AI models from Anthropic with strong reasoning capabilities',
+      description:
+        'Advanced AI models from Anthropic with strong reasoning capabilities',
       isEnabled: false,
       envVarName: 'ANTHROPIC_API_KEY',
       models: ANTHROPIC_MODELS,
@@ -44,7 +45,7 @@ export class ProviderManagerService {
     {
       id: 'google',
       name: 'Google Gemini',
-      description: 'Google\'s multimodal AI models with large context windows',
+      description: "Google's multimodal AI models with large context windows",
       isEnabled: false,
       envVarName: 'GEMINI_API_KEY',
       models: GOOGLE_MODELS,
@@ -85,9 +86,9 @@ export class ProviderManagerService {
     for (const provider of this.providerConfigs) {
       const apiKey = this.configService.get<string>(provider.envVarName);
       provider.isEnabled = !!(apiKey && apiKey.trim().length > 0);
-      
+
       this.logger.log(
-        `Provider ${provider.name}: ${provider.isEnabled ? 'enabled' : 'disabled'}`
+        `Provider ${provider.name}: ${provider.isEnabled ? 'enabled' : 'disabled'}`,
       );
     }
   }
@@ -96,14 +97,14 @@ export class ProviderManagerService {
    * Get all available providers with their status
    */
   getAvailableProviders(): ProviderConfig[] {
-    return this.providerConfigs.map(provider => ({ ...provider }));
+    return this.providerConfigs.map((provider) => ({ ...provider }));
   }
 
   /**
    * Get enabled providers only
    */
   getEnabledProviders(): ProviderConfig[] {
-    return this.providerConfigs.filter(provider => provider.isEnabled);
+    return this.providerConfigs.filter((provider) => provider.isEnabled);
   }
 
   /**
@@ -118,7 +119,7 @@ export class ProviderManagerService {
    */
   getAllAvailableModels(): BytebotAgentModel[] {
     const models: BytebotAgentModel[] = [];
-    
+
     for (const provider of this.providerConfigs) {
       if (provider.isEnabled) {
         models.push(...provider.models);
@@ -132,7 +133,7 @@ export class ProviderManagerService {
    * Get models for a specific provider
    */
   getModelsForProvider(providerId: string): BytebotAgentModel[] {
-    const provider = this.providerConfigs.find(p => p.id === providerId);
+    const provider = this.providerConfigs.find((p) => p.id === providerId);
     return provider?.models || [];
   }
 
@@ -148,7 +149,7 @@ export class ProviderManagerService {
    * Check if a provider is enabled
    */
   isProviderEnabled(providerId: string): boolean {
-    const provider = this.providerConfigs.find(p => p.id === providerId);
+    const provider = this.providerConfigs.find((p) => p.id === providerId);
     return provider?.isEnabled || false;
   }
 
@@ -174,10 +175,13 @@ export class ProviderManagerService {
 
     try {
       // If the service implements BaseProvider interface and has healthCheck
-      if ('healthCheck' in service && typeof service.healthCheck === 'function') {
+      if (
+        'healthCheck' in service &&
+        typeof service.healthCheck === 'function'
+      ) {
         return await service.healthCheck();
       }
-      
+
       // Fallback: try a simple API call
       // This is a basic implementation - could be enhanced
       return true;

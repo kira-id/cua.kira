@@ -332,7 +332,13 @@ export class OpenAIService implements BytebotAgentService, BaseProvider {
     useTools: boolean,
     signal?: AbortSignal,
   ): Promise<BytebotAgentResponse> {
-    return this.generateMessage(systemPrompt, messages, model, useTools, signal);
+    return this.generateMessage(
+      systemPrompt,
+      messages,
+      model,
+      useTools,
+      signal,
+    );
   }
 
   async healthCheck(): Promise<boolean> {
@@ -358,10 +364,10 @@ export class OpenAIService implements BytebotAgentService, BaseProvider {
   async getAvailableModels(): Promise<string[]> {
     try {
       const response = await this.openai.models.list();
-      return response.data.map(model => model.id);
+      return response.data.map((model) => model.id);
     } catch (error) {
       this.logger.error('Failed to fetch OpenAI models:', error);
-      return OPENAI_MODELS.map(model => model.name);
+      return OPENAI_MODELS.map((model) => model.name);
     }
   }
 }

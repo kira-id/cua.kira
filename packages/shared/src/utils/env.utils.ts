@@ -29,3 +29,15 @@ export function getDesktopBaseUrl(rawValue?: string): string {
   const normalized = parsed.toString();
   return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
 }
+
+export function getDisplayWidth(): number {
+  const envValue = (globalThis as EnvHolder).process?.env?.SCREENSHOT_MAX_WIDTH;
+  const parsed = parseInt(envValue?.trim() ?? '', 10);
+  return isNaN(parsed) ? 1280 : parsed;
+}
+
+export function getDisplayHeight(): number {
+  const envValue = (globalThis as EnvHolder).process?.env?.SCREENSHOT_MAX_HEIGHT;
+  const parsed = parseInt(envValue?.trim() ?? '', 10);
+  return isNaN(parsed) ? 960 : parsed;
+}

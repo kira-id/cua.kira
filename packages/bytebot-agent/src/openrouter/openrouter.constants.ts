@@ -9,6 +9,12 @@ export const OPENROUTER_MODELS: BytebotAgentModel[] = [
   },
   {
     provider: 'openrouter',
+    name: 'qwen/qwen3-vl-30b-a3b-instruct',
+    title: 'Qwen3 VL 30B (OpenRouter)',
+    contextWindow: 131072,
+  },
+  {
+    provider: 'openrouter',
     name: 'anthropic/claude-3.5-sonnet',
     title: 'Claude 3.5 Sonnet (OpenRouter)',
     contextWindow: 200000,

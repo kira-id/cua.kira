@@ -15,6 +15,7 @@ import {
   ScreenshotToolUseBlock,
   ToolResultContentBlock,
   UserActionContentBlock,
+  ImageMediaType,
 } from '@bytebot/shared';
 import { Role } from '@prisma/client';
 import { MessagesService } from '../messages/messages.service';
@@ -67,8 +68,11 @@ export class InputCaptureService {
         if (action.action !== 'click_mouse' && action.action !== 'drag_mouse')
           return;
 
-        const mediaType =
-          typeof shot.mediaType === 'string' ? shot.mediaType : 'image/png';
+        const mediaType: ImageMediaType =
+          typeof shot.mediaType === 'string' &&
+          ['image/png', 'image/jpeg', 'image/webp'].includes(shot.mediaType)
+            ? (shot.mediaType as ImageMediaType)
+            : 'image/png';
 
         const userActionBlock: UserActionContentBlock = {
           type: MessageContentType.UserAction,

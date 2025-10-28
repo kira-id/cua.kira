@@ -21,10 +21,111 @@ import {
   isPasteTextToolUseBlock,
   isReadFileToolUseBlock,
   ImageMediaType,
+  getDesktopBaseUrl,
 } from '@bytebot/shared';
 import { Logger } from '@nestjs/common';
 
-const BYTEBOT_DESKTOP_BASE_URL = process.env.BYTEBOT_DESKTOP_BASE_URL as string;
+let cachedDesktopBaseUrl: string | null = null;
+
+function desktopBaseUrl(): string {
+  if (!cachedDesktopBaseUrl) {
+    cachedDesktopBaseUrl = getDesktopBaseUrl();
+  }
+
+  return cachedDesktopBaseUrl;
+}
+
+function safeDesktopBaseUrl(): string | null {
+  if (cachedDesktopBaseUrl) {
+    return cachedDesktopBaseUrl;
+  }
+
+  try {
+    return getDesktopBaseUrl();
+  } catch {
+    return null;
+  }
+}
+
+function extractErrorCode(error: unknown): string | undefined {
+  if (error && typeof error === 'object') {
+    const withCode = error as { code?: unknown };
+    if (typeof withCode.code === 'string') {
+      return withCode.code;
+    }
+
+    const withCause = error as { cause?: unknown };
+    if (withCause.cause && typeof withCause.cause === 'object') {
+      const causeWithCode = withCause.cause as { code?: unknown };
+      if (typeof causeWithCode.code === 'string') {
+        return causeWithCode.code;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function formatComputerToolError(
+  toolName: string,
+  error: unknown,
+): string {
+  const errorMessage =
+    error instanceof Error ? error.message : String(error ?? 'Unknown error');
+  const baseMessage = `Error executing ${toolName} tool: ${errorMessage}`;
+
+  if (!(error instanceof Error)) {
+    return baseMessage;
+  }
+
+  const knownConfigMessages = [
+    'BYTEBOT_DESKTOP_BASE_URL environment variable is not set',
+    'Invalid BYTEBOT_DESKTOP_BASE_URL',
+  ];
+
+  if (knownConfigMessages.some((msg) => errorMessage.includes(msg))) {
+    return baseMessage;
+  }
+
+  const code = extractErrorCode(error);
+  if (
+    code &&
+    ['ECONNREFUSED', 'EHOSTUNREACH', 'ENOTFOUND', 'ETIMEDOUT'].includes(code)
+  ) {
+    const baseUrl = safeDesktopBaseUrl();
+    if (baseUrl) {
+      return (
+        `Unable to reach the desktop service at ${baseUrl}. ` +
+        'Ensure the bytebot-desktop container is running and BYTEBOT_DESKTOP_BASE_URL points to it. ' +
+        `Original error: ${errorMessage}`
+      );
+    }
+  }
+
+  if (/fetch failed/i.test(errorMessage) || /Failed to fetch/i.test(errorMessage)) {
+    const baseUrl = safeDesktopBaseUrl();
+    if (baseUrl) {
+      return (
+        `Failed to call the desktop service at ${baseUrl}. ` +
+        'Verify the service is reachable. ' +
+        `Original error: ${errorMessage}`
+      );
+    }
+  }
+
+  if (/Failed to parse URL/i.test(errorMessage)) {
+    const baseUrl = safeDesktopBaseUrl();
+    if (baseUrl) {
+      return (
+        `The desktop service URL "${baseUrl}" appears to be invalid. ` +
+        'Check BYTEBOT_DESKTOP_BASE_URL. ' +
+        `Original error: ${errorMessage}`
+      );
+    }
+  }
+
+  return baseMessage;
+}
 
 type ScreenshotResult = {
   data: string;
@@ -221,9 +322,10 @@ export async function handleComputerToolUse(
 
     return toolResult;
   } catch (error) {
+    const errorMessage = formatComputerToolError(block.name, error);
     logger.error(
-      `Error executing ${block.name} tool: ${error.message}`,
-      error.stack,
+      errorMessage,
+      error instanceof Error ? error.stack : undefined,
     );
     return {
       type: MessageContentType.ToolResult,
@@ -231,7 +333,7 @@ export async function handleComputerToolUse(
       content: [
         {
           type: MessageContentType.Text,
-          text: `Error executing ${block.name} tool: ${error.message}`,
+          text: errorMessage,
         },
       ],
       is_error: true,
@@ -246,7 +348,7 @@ async function moveMouse(input: { coordinates: Coordinates }): Promise<void> {
   );
 
   try {
-    await fetch(`${BYTEBOT_DESKTOP_BASE_URL}/computer-use`, {
+    await fetch(`${desktopBaseUrl()}/computer-use`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -270,7 +372,7 @@ async function traceMouse(input: {
   );
 
   try {
-    await fetch(`${BYTEBOT_DESKTOP_BASE_URL}/computer-use`, {
+    await fetch(`${desktopBaseUrl()}/computer-use`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -297,7 +399,7 @@ async function clickMouse(input: {
   );
 
   try {
-    await fetch(`${BYTEBOT_DESKTOP_BASE_URL}/computer-use`, {
+    await fetch(`${desktopBaseUrl()}/computer-use`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -325,7 +427,7 @@ async function pressMouse(input: {
   );
 
   try {
-    await fetch(`${BYTEBOT_DESKTOP_BASE_URL}/computer-use`, {
+    await fetch(`${desktopBaseUrl()}/computer-use`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -352,7 +454,7 @@ async function dragMouse(input: {
   );
 
   try {
-    await fetch(`${BYTEBOT_DESKTOP_BASE_URL}/computer-use`, {
+    await fetch(`${desktopBaseUrl()}/computer-use`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -380,7 +482,7 @@ async function scroll(input: {
   );
 
   try {
-    await fetch(`${BYTEBOT_DESKTOP_BASE_URL}/computer-use`, {
+    await fetch(`${desktopBaseUrl()}/computer-use`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -405,7 +507,7 @@ async function typeKeys(input: {
   console.log(`Typing keys: ${keys}`);
 
   try {
-    await fetch(`${BYTEBOT_DESKTOP_BASE_URL}/computer-use`, {
+    await fetch(`${desktopBaseUrl()}/computer-use`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -428,7 +530,7 @@ async function pressKeys(input: {
   console.log(`Pressing keys: ${keys}`);
 
   try {
-    await fetch(`${BYTEBOT_DESKTOP_BASE_URL}/computer-use`, {
+    await fetch(`${desktopBaseUrl()}/computer-use`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -451,7 +553,7 @@ async function typeText(input: {
   console.log(`Typing text: ${text}`);
 
   try {
-    await fetch(`${BYTEBOT_DESKTOP_BASE_URL}/computer-use`, {
+    await fetch(`${desktopBaseUrl()}/computer-use`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -471,7 +573,7 @@ async function pasteText(input: { text: string }): Promise<void> {
   console.log(`Pasting text: ${text}`);
 
   try {
-    await fetch(`${BYTEBOT_DESKTOP_BASE_URL}/computer-use`, {
+    await fetch(`${desktopBaseUrl()}/computer-use`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -490,7 +592,7 @@ async function wait(input: { duration: number }): Promise<void> {
   console.log(`Waiting for ${duration}ms`);
 
   try {
-    await fetch(`${BYTEBOT_DESKTOP_BASE_URL}/computer-use`, {
+    await fetch(`${desktopBaseUrl()}/computer-use`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -508,7 +610,7 @@ async function cursorPosition(): Promise<Coordinates> {
   console.log('Getting cursor position');
 
   try {
-    const response = await fetch(`${BYTEBOT_DESKTOP_BASE_URL}/computer-use`, {
+    const response = await fetch(`${desktopBaseUrl()}/computer-use`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -532,7 +634,7 @@ async function screenshot(): Promise<ScreenshotResult> {
       action: 'screenshot',
     };
 
-    const response = await fetch(`${BYTEBOT_DESKTOP_BASE_URL}/computer-use`, {
+    const response = await fetch(`${desktopBaseUrl()}/computer-use`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody),
@@ -567,7 +669,7 @@ async function application(input: { application: string }): Promise<void> {
   console.log(`Opening application: ${application}`);
 
   try {
-    await fetch(`${BYTEBOT_DESKTOP_BASE_URL}/computer-use`, {
+    await fetch(`${desktopBaseUrl()}/computer-use`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -593,7 +695,7 @@ async function readFile(input: { path: string }): Promise<{
   console.log(`Reading file: ${path}`);
 
   try {
-    const response = await fetch(`${BYTEBOT_DESKTOP_BASE_URL}/computer-use`, {
+    const response = await fetch(`${desktopBaseUrl()}/computer-use`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -628,7 +730,7 @@ export async function writeFile(input: {
     // Content is always base64 encoded
     const base64Data = content;
 
-    const response = await fetch(`${BYTEBOT_DESKTOP_BASE_URL}/computer-use`, {
+    const response = await fetch(`${desktopBaseUrl()}/computer-use`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

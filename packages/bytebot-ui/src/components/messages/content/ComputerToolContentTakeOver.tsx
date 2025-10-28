@@ -7,6 +7,7 @@ import {
   isPressKeysToolUseBlock,
   isWaitToolUseBlock,
   isScrollToolUseBlock,
+  isCursorPositionToolUseBlock,
 } from "@bytebot/shared";
 import { getIcon, getLabel } from "./ComputerToolUtils";
 
@@ -65,6 +66,11 @@ function ToolDetailsTakeOver({ block }: { block: ComputerToolUseContentBlock }) 
           </p>
         )}
       
+      {/* Cursor position information */}
+      {isCursorPositionToolUseBlock(block) && (
+        <p className={baseClasses}>Getting mouse cursor position</p>
+      )}
+
       {/* Scroll information */}
       {isScrollToolUseBlock(block) && (
         <p className={baseClasses}>

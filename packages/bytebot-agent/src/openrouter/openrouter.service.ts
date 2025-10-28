@@ -187,6 +187,23 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
         `Token usage summary: ${this.serializeForLog(data.usage)}`,
       );
 
+      if (contentBlocks.length === 0) {
+        this.logger.warn(
+          'OpenRouter returned an empty response with no content blocks or tool calls.',
+        );
+
+        if (useTools) {
+          this.logger.warn(
+            'Retrying OpenRouter request without tools due to empty response.',
+          );
+          return this.send(systemPrompt, messages, model, false, signal);
+        }
+
+        throw new Error(
+          'OpenRouter returned an empty response without content or tool calls.',
+        );
+      }
+
       return {
         contentBlocks,
         tokenUsage: {

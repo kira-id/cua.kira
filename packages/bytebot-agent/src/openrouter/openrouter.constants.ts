@@ -5,7 +5,7 @@ export const OPENROUTER_MODELS: BytebotAgentModel[] = [
     provider: 'openrouter',
     name: 'qwen/qwen3-vl-235b-a22b-instruct',
     title: 'Qwen3 VL 235B (OpenRouter)',
-    contextWindow: 262000,
+    contextWindow: 131072,
   },
   {
     provider: 'openrouter',

@@ -294,8 +294,79 @@ describe('OpenRouterService', () => {
       });
     });
 
-    it('should handle zero completion tokens with empty response', async () => {
-      const mockResponse = {
+    it('should retry without tools when response is empty and eventually succeed', async () => {
+      const emptyResponse = {
+        choices: [
+          {
+            message: {
+              content: '',
+            },
+          },
+        ],
+        usage: {
+          prompt_tokens: 5,
+          completion_tokens: 0,
+          total_tokens: 5,
+        },
+      };
+
+      const successfulResponse = {
+        choices: [
+          {
+            message: {
+              content: 'Fallback response',
+            },
+          },
+        ],
+        usage: {
+          prompt_tokens: 5,
+          completion_tokens: 5,
+          total_tokens: 10,
+        },
+      };
+
+      (fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(emptyResponse),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(successfulResponse),
+        });
+
+      const result = await service.generateMessage(
+        'You are a helpful assistant',
+        [mockMessage],
+        'anthropic/claude-3.5-sonnet',
+        true,
+      );
+
+      expect(fetch).toHaveBeenCalledTimes(2);
+
+      const firstCallBody = JSON.parse((fetch as jest.Mock).mock.calls[0][1].body);
+      expect(firstCallBody.tool_choice).toBe('auto');
+      expect(firstCallBody.tools).toBeDefined();
+
+      const secondCallBody = JSON.parse((fetch as jest.Mock).mock.calls[1][1].body);
+      expect(secondCallBody.tool_choice).toBeUndefined();
+      expect(secondCallBody.tools).toBeUndefined();
+
+      expect(result.contentBlocks).toEqual([
+        {
+          type: MessageContentType.Text,
+          text: 'Fallback response',
+        },
+      ]);
+      expect(result.tokenUsage).toEqual({
+        inputTokens: 5,
+        outputTokens: 5,
+        totalTokens: 10,
+      });
+    });
+
+    it('should throw when OpenRouter returns empty response without tools', async () => {
+      const emptyResponse = {
         choices: [
           {
             message: {
@@ -312,22 +383,19 @@ describe('OpenRouterService', () => {
 
       (fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
-        json: jest.fn().mockResolvedValueOnce(mockResponse),
+        json: jest.fn().mockResolvedValueOnce(emptyResponse),
       });
 
-      const result = await service.generateMessage(
-        'You are a helpful assistant',
-        [mockMessage],
-        'anthropic/claude-3.5-sonnet',
-        true,
+      await expect(
+        service.generateMessage(
+          'You are a helpful assistant',
+          [mockMessage],
+          'anthropic/claude-3.5-sonnet',
+          false,
+        ),
+      ).rejects.toThrow(
+        'OpenRouter returned an empty response without content or tool calls.',
       );
-
-      expect(result.contentBlocks).toEqual([]);
-      expect(result.tokenUsage).toEqual({
-        inputTokens: 5,
-        outputTokens: 0,
-        totalTokens: 5,
-      });
     });
   });
 

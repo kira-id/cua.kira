@@ -6,6 +6,8 @@ interface CompressionOptions {
   minQuality?: number;
   format?: 'png' | 'jpeg' | 'webp';
   maxIterations?: number;
+  maxWidth?: number;
+  maxHeight?: number;
 }
 
 interface CompressionResult {
@@ -153,26 +155,43 @@ class Base64ImageCompressor {
       ...compressionOptions
     } = options;
 
-    // First try compression without resizing
-    let result = await this.compressToSize(base64String, compressionOptions);
+    const base64Data = base64String.replace(/^data:image\/\w+;base64,/, '');
+    const inputBuffer = Buffer.from(base64Data, 'base64');
+    const constrainedBuffer = await this.resizeToFitDimensions(
+      inputBuffer,
+      maxWidth,
+      maxHeight,
+    );
+    const constrainedBase64 = constrainedBuffer.toString('base64');
+
+    // First try compression without additional resizing
+    let result = await this.compressToSize(
+      constrainedBase64,
+      compressionOptions,
+    );
 
     // If still too large, apply progressive resizing
     if (result.sizeKB > targetSizeKB) {
-      const base64Data = base64String.replace(/^data:image\/\w+;base64,/, '');
-      const inputBuffer = Buffer.from(base64Data, 'base64');
-
-      const metadata = await sharp(inputBuffer).metadata();
+      const metadata = await sharp(constrainedBuffer).metadata();
       const originalWidth = metadata.width || maxWidth;
       const originalHeight = metadata.height || maxHeight;
 
       let scale = 0.9; // Start with 90% of original size
 
       while (result.sizeKB > targetSizeKB && scale > 0.3) {
-        const newWidth = Math.floor(originalWidth * scale);
-        const newHeight = Math.floor(originalHeight * scale);
+        const newWidth =
+          typeof originalWidth === 'number'
+            ? Math.max(Math.floor(originalWidth * scale), 1)
+            : undefined;
+        const newHeight =
+          typeof originalHeight === 'number'
+            ? Math.max(Math.floor(originalHeight * scale), 1)
+            : undefined;
 
-        const resizedBuffer = await sharp(inputBuffer)
-          .resize(newWidth, newHeight, {
+        const resizedBuffer = await sharp(constrainedBuffer)
+          .resize({
+            width: newWidth,
+            height: newHeight,
             fit: 'inside',
             withoutEnlargement: true,
           })
@@ -186,6 +205,42 @@ class Base64ImageCompressor {
     }
 
     return result;
+  }
+
+  private static async resizeToFitDimensions(
+    inputBuffer: Buffer,
+    maxWidth?: number,
+    maxHeight?: number,
+  ): Promise<Buffer> {
+    if (!maxWidth && !maxHeight) {
+      return inputBuffer;
+    }
+
+    const metadata = await sharp(inputBuffer).metadata();
+    const currentWidth = metadata.width;
+    const currentHeight = metadata.height;
+
+    const exceedsWidth =
+      typeof maxWidth === 'number' &&
+      typeof currentWidth === 'number' &&
+      currentWidth > maxWidth;
+    const exceedsHeight =
+      typeof maxHeight === 'number' &&
+      typeof currentHeight === 'number' &&
+      currentHeight > maxHeight;
+
+    if (!exceedsWidth && !exceedsHeight) {
+      return inputBuffer;
+    }
+
+    return sharp(inputBuffer)
+      .resize({
+        width: maxWidth,
+        height: maxHeight,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .toBuffer();
   }
 
   /**

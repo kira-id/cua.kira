@@ -11,6 +11,7 @@ import {
   Application,
   isPasteTextToolUseBlock,
   isReadFileToolUseBlock,
+  isCursorPositionToolUseBlock,
 } from "@bytebot/shared";
 import { getIcon, getLabel } from "./ComputerToolUtils";
 
@@ -81,6 +82,11 @@ function ToolDetailsNormal({ block }: { block: ComputerToolUseContentBlock }) {
             {block.input.path[block.input.path.length - 1].y}
           </p>
         )}
+
+      {/* Cursor position information */}
+      {isCursorPositionToolUseBlock(block) && (
+        <p className={baseClasses}>Getting mouse cursor position</p>
+      )}
 
       {/* Scroll information */}
       {isScrollToolUseBlock(block) && (

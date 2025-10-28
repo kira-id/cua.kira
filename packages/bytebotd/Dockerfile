@@ -183,6 +183,8 @@ RUN apt-get update && \
 
 COPY ./shared/ /bytebot/shared/
 COPY ./bytebotd/ /bytebot/bytebotd/
+RUN mkdir -p /etc/supervisor/conf.d
+COPY ./bytebotd/overwrites/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 WORKDIR /bytebot/bytebotd
 RUN npm install --build-from-source
 RUN npm rebuild uiohook-napi --build-from-source

@@ -66,6 +66,9 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
   private readonly logger = new Logger(OpenRouterService.name);
   private readonly apiKey: string;
   private readonly baseUrl = 'https://openrouter.ai/api/v1';
+  private readonly toolNames = new Set(
+    openrouterTools.map((tool) => tool.function.name),
+  );
 
   constructor(private readonly configService: ConfigService) {
     this.apiKey = this.configService.get<string>('OPENROUTER_API_KEY') || '';
@@ -145,11 +148,15 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
       this.logger.debug(
         `OpenRouter response status: ${response.status} ${response.statusText}`,
       );
-      this.logger.debug(
-        `OpenRouter response headers: ${this.serializeForLog(
-          Object.fromEntries(response.headers.entries()),
-        )}`,
-      );
+      if (response.headers && typeof response.headers.entries === 'function') {
+        this.logger.debug(
+          `OpenRouter response headers: ${this.serializeForLog(
+            Object.fromEntries(response.headers.entries()),
+          )}`,
+        );
+      } else {
+        this.logger.debug('OpenRouter response headers: <unavailable in mock>');
+      }
 
       if (!response.ok) {
         if (response.status === 429) {
@@ -165,6 +172,11 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
       this.logger.debug(
         `OpenRouter response body: ${this.serializeForLog(data)}`,
       );
+
+      // Check for zero completion_tokens and handle appropriately
+      if (data.usage && data.usage.completion_tokens === 0) {
+        this.handleZeroCompletionTokens(data);
+      }
 
       const contentBlocks = this.formatOpenRouterResponse(data);
 
@@ -263,22 +275,9 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
               content: `User performed action: ${block.name}\n${JSON.stringify(block.input, null, 2)}`,
             });
           } else if (isImageContentBlock(block)) {
-            openrouterMessages.push({
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: 'Screenshot',
-                },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:${block.source.media_type};base64,${block.source.data}`,
-                    detail: 'high',
-                  },
-                },
-              ],
-            });
+            openrouterMessages.push(
+              this.createImageMessage('user', block as ImageContentBlock),
+            );
           }
         }
         continue;
@@ -296,22 +295,12 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
           }
           case MessageContentType.Image: {
             const imageBlock = block as ImageContentBlock;
-            openrouterMessages.push({
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: 'Screenshot',
-                },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:${imageBlock.source.media_type};base64,${imageBlock.source.data}`,
-                    detail: 'high',
-                  },
-                },
-              ],
-            });
+            openrouterMessages.push(
+              this.createImageMessage(
+                message.role === Role.USER ? 'user' : 'assistant',
+                imageBlock,
+              ),
+            );
             break;
           }
           case MessageContentType.ToolUse: {
@@ -319,14 +308,14 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
               const toolBlock = block as ToolUseContentBlock;
               openrouterMessages.push({
                 role: 'assistant',
-                content: null,
+                content: '',
                 tool_calls: [
                   {
                     id: toolBlock.id,
                     type: 'function',
                     function: {
                       name: toolBlock.name,
-                      arguments: JSON.stringify(toolBlock.input),
+                      arguments: JSON.stringify(toolBlock.input ?? {}),
                     },
                   },
                 ],
@@ -336,47 +325,26 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
           }
           case MessageContentType.ToolResult: {
             const toolResult = block as ToolResultContentBlock;
-            const textOutputs: string[] = [];
-            let hasImageContent = false;
+            const textOutputs = toolResult.content
+              .filter((content) => content.type === MessageContentType.Text)
+              .map((content) => (content as TextContentBlock).text)
+              .filter((text) => text.trim().length > 0);
+            const imageContents = toolResult.content.filter(
+              (content) => content.type === MessageContentType.Image,
+            ) as ImageContentBlock[];
 
-            toolResult.content.forEach((content) => {
-              if (content.type === MessageContentType.Text) {
-                textOutputs.push(content.text);
-              } else if (content.type === MessageContentType.Image) {
-                hasImageContent = true;
-                const imageContent = content as ImageContentBlock;
-                openrouterMessages.push({
-                  role: 'user',
-                  content: [
-                    {
-                      type: 'text',
-                      text: 'Screenshot',
-                    },
-                    {
-                      type: 'image_url',
-                      image_url: {
-                        url: `data:${imageContent.source.media_type};base64,${imageContent.source.data}`,
-                        detail: 'high',
-                      },
-                    },
-                  ],
-                });
-              }
+            const toolContent = textOutputs.join('\n').trim();
+            openrouterMessages.push({
+              role: 'tool',
+              tool_call_id: toolResult.tool_use_id,
+              content: toolContent,
             });
 
-            if (textOutputs.length > 0) {
-              openrouterMessages.push({
-                role: 'tool',
-                tool_call_id: toolResult.tool_use_id,
-                content: textOutputs.join('\n'),
-              });
-            } else if (hasImageContent) {
-              openrouterMessages.push({
-                role: 'tool',
-                tool_call_id: toolResult.tool_use_id,
-                content: 'screenshot',
-              });
-            }
+            imageContents.forEach((imageContent) => {
+              openrouterMessages.push(
+                this.createImageMessage('user', imageContent),
+              );
+            });
             break;
           }
           default:
@@ -409,11 +377,19 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
           const toolUseBlocksFromContent: ToolUseContentBlock[] = [];
 
           for (const part of message.content) {
-            if (typeof part.text === 'string' && part.text.trim().length > 0) {
+            if (
+              (part.type === 'text' || part.type === 'output_text') &&
+              typeof part.text === 'string' &&
+              part.text.trim().length > 0
+            ) {
               textParts.push(part.text);
             }
 
-            if (part.type === 'tool_use') {
+            if (
+              part.type === 'tool_use' ||
+              part.type === 'function_call' ||
+              part.type === 'function'
+            ) {
               const toolUseId =
                 part.id || `openrouter-tool-${parsedToolCallIds.size + 1}`;
               parsedToolCallIds.add(toolUseId);
@@ -444,10 +420,25 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
           typeof message.content === 'string' &&
           message.content.trim().length > 0
         ) {
-          contentBlocks.push({
-            type: MessageContentType.Text,
-            text: message.content,
-          } as TextContentBlock);
+          let remainingText = message.content;
+
+          if (!message.tool_calls || message.tool_calls.length === 0) {
+            const inlineToolResult = this.extractInlineToolCalls(
+              remainingText,
+              parsedToolCallIds,
+            );
+            remainingText = inlineToolResult.remainingText;
+            inlineToolResult.toolBlocks.forEach((block) => {
+              contentBlocks.push(block);
+            });
+          }
+
+          if (remainingText.trim().length > 0) {
+            contentBlocks.push({
+              type: MessageContentType.Text,
+              text: remainingText.trim(),
+            } as TextContentBlock);
+          }
         }
       }
 
@@ -517,6 +508,151 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
     }
 
     return {};
+  }
+
+  private createImageMessage(
+    role: 'user' | 'assistant',
+    image: ImageContentBlock,
+  ): OpenRouterMessage {
+    return {
+      role,
+      content: [
+        {
+          type: 'image_url',
+          image_url: {
+            url: `data:${image.source.media_type};base64,${image.source.data}`,
+            detail: 'high',
+          },
+        },
+      ],
+    };
+  }
+
+  private extractInlineToolCalls(
+    text: string,
+    parsedToolCallIds: Set<string>,
+  ): { remainingText: string; toolBlocks: ToolUseContentBlock[] } {
+    let remaining = text;
+    const toolBlocks: ToolUseContentBlock[] = [];
+
+    for (const toolName of this.toolNames) {
+      let searchIndex = 0;
+
+      while (searchIndex < remaining.length) {
+        const invocationIndex = remaining.indexOf(`${toolName}(`, searchIndex);
+        if (invocationIndex === -1) {
+          break;
+        }
+
+        const argsStart = remaining.indexOf('{', invocationIndex);
+        if (argsStart === -1) {
+          searchIndex = invocationIndex + toolName.length;
+          continue;
+        }
+
+        const argsEnd = this.findMatchingClosingBrace(remaining, argsStart);
+        if (argsEnd === -1) {
+          searchIndex = invocationIndex + toolName.length;
+          continue;
+        }
+
+        const closingParenIndex = remaining.indexOf(')', argsEnd);
+        if (closingParenIndex === -1) {
+          searchIndex = invocationIndex + toolName.length;
+          continue;
+        }
+
+        const rawArguments = remaining.slice(argsStart, argsEnd + 1);
+        const parsedArguments = this.tryParseJson(rawArguments);
+
+        if (!parsedArguments) {
+          searchIndex = invocationIndex + toolName.length;
+          continue;
+        }
+
+        const toolId = `inline-tool-${parsedToolCallIds.size + toolBlocks.length + 1}`;
+        toolBlocks.push({
+          type: MessageContentType.ToolUse,
+          id: toolId,
+          name: toolName,
+          input: parsedArguments,
+        } as ToolUseContentBlock);
+        parsedToolCallIds.add(toolId);
+
+        remaining =
+          remaining.slice(0, invocationIndex) +
+          remaining.slice(closingParenIndex + 1);
+        searchIndex = invocationIndex;
+      }
+    }
+
+    return {
+      remainingText: remaining.trim(),
+      toolBlocks,
+    };
+  }
+
+  private findMatchingClosingBrace(text: string, startIndex: number): number {
+    let depth = 0;
+
+    for (let i = startIndex; i < text.length; i++) {
+      const char = text[i];
+
+      if (char === '{') {
+        depth++;
+      } else if (char === '}') {
+        depth--;
+
+        if (depth === 0) {
+          return i;
+        }
+      }
+    }
+
+    return -1;
+  }
+
+  private tryParseJson(raw: string): Record<string, unknown> | null {
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      this.logger.debug(
+        `Failed to parse inline tool call arguments: ${raw}. ${(error as Error).message}`,
+      );
+      return null;
+    }
+  }
+
+  private handleZeroCompletionTokens(data: OpenRouterResponse): void {
+    const choice = data.choices?.[0];
+    const message = choice?.message;
+
+    // Check for tool-call only response
+    if (message?.tool_calls && message.tool_calls.length > 0) {
+      this.logger.warn(
+        'Zero completion_tokens detected: Tool-call only response. This is normal behavior - OpenRouter does not count tool arguments as completion tokens.',
+      );
+      return;
+    }
+
+    // Check for empty content
+    const hasContent =
+      (typeof message?.content === 'string' && message.content.trim().length > 0) ||
+      (Array.isArray(message?.content) && message.content.some(part =>
+        typeof part.text === 'string' && part.text.trim().length > 0
+      ));
+
+    if (!hasContent) {
+      this.logger.warn(
+        'Zero completion_tokens detected: Truly empty assistant message. Possible causes: brittle stop strings, invalid response_format/JSON schema, too small max_output_tokens, or model safety/guardrail silently blanking output.',
+      );
+      return;
+    }
+
+    // Check for streaming aggregation loss (though this is less likely in non-streaming mode)
+    this.logger.warn(
+      'Zero completion_tokens detected: Unknown cause. May be due to streaming aggregation loss or provider/model quirk with tool_choice:"required".',
+    );
   }
 
   private serializeForLog(value: unknown): string {

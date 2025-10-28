@@ -6,6 +6,7 @@ import {
   isUserActionContentBlock,
   MessageContentBlock,
   MessageContentType,
+  ImageContentBlock,
   TextContentBlock,
   ThinkingContentBlock,
   ToolUseContentBlock,
@@ -162,7 +163,7 @@ export class GoogleService implements BytebotAgentService, BaseProvider {
                 functionCall: {
                   id: block.id,
                   name: block.name,
-                  args: block.input,
+                  args: block.input ?? {},
                 },
               });
               break;
@@ -175,38 +176,40 @@ export class GoogleService implements BytebotAgentService, BaseProvider {
               });
               break;
             case MessageContentType.ToolResult: {
-              const toolResultContentBlock = block.content[0];
-              if (toolResultContentBlock.type === MessageContentType.Image) {
-                parts.push({
-                  functionResponse: {
-                    id: block.tool_use_id,
-                    name: 'screenshot',
-                    response: {
-                      ...(!block.is_error && {
-                        output: 'screenshot successful',
-                      }),
-                      ...(block.is_error && { error: block.content[0] }),
-                    },
-                  },
-                });
-                parts.push({
-                  inlineData: {
-                    data: toolResultContentBlock.source.data,
-                    mimeType: toolResultContentBlock.source.media_type,
-                  },
-                });
-                break;
+              const textOutputs = block.content
+                .filter((content) => content.type === MessageContentType.Text)
+                .map((content) => (content as TextContentBlock).text)
+                .filter((text) => text.trim().length > 0);
+              const imageContents = block.content.filter(
+                (content) => content.type === MessageContentType.Image,
+              ) as ImageContentBlock[];
+
+              const aggregatedText = textOutputs.join('\n').trim();
+              const responsePayload: Record<string, unknown> = {};
+
+              if (aggregatedText.length > 0) {
+                if (block.is_error) {
+                  responsePayload.error = aggregatedText;
+                } else {
+                  responsePayload.output = aggregatedText;
+                }
               }
 
               parts.push({
                 functionResponse: {
                   id: block.tool_use_id,
                   name: this.getToolName(block.tool_use_id, messages),
-                  response: {
-                    ...(!block.is_error && { output: block.content[0] }),
-                    ...(block.is_error && { error: block.content[0] }),
-                  },
+                  response: responsePayload,
                 },
+              });
+
+              imageContents.forEach((imageBlock) => {
+                parts.push({
+                  inlineData: {
+                    data: imageBlock.source.data,
+                    mimeType: imageBlock.source.media_type,
+                  },
+                });
               });
               break;
             }

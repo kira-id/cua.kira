@@ -77,7 +77,7 @@ export class InputCaptureService {
               type: MessageContentType.Image,
               source: {
                 data: shot.image,
-                media_type: mediaType,
+                media_type: mediaType as any,
                 type: 'base64',
               },
             },

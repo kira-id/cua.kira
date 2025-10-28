@@ -375,12 +375,18 @@ export class AgentProcessor {
               status: TaskStatus.COMPLETED,
               completedAt: new Date(),
             });
-            break;
+            // Stop processing when task is completed
+            this.isProcessing = false;
+            this.currentTaskId = null;
+            return;
           case 'needs_help':
             await this.tasksService.update(taskId, {
               status: TaskStatus.NEEDS_HELP,
             });
-            break;
+            // Stop processing when task needs help
+            this.isProcessing = false;
+            this.currentTaskId = null;
+            return;
         }
       }
 

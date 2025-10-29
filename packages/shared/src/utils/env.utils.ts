@@ -33,13 +33,13 @@ export function getDesktopBaseUrl(rawValue?: string): string {
 }
 
 export function getDisplayWidth(): number {
-  const envValue = (globalThis as EnvHolder).process?.env?.SCREENSHOT_MAX_WIDTH;
+  const envValue = (globalThis as EnvHolder).process?.env?.DISPLAY_WIDTH;
   const parsed = parseInt(envValue?.trim() ?? '', 10);
   return isNaN(parsed) ? 1280 : parsed;
 }
 
 export function getDisplayHeight(): number {
-  const envValue = (globalThis as EnvHolder).process?.env?.SCREENSHOT_MAX_HEIGHT;
+  const envValue = (globalThis as EnvHolder).process?.env?.DISPLAY_HEIGHT;
   const parsed = parseInt(envValue?.trim() ?? '', 10);
   return isNaN(parsed) ? 960 : parsed;
 }

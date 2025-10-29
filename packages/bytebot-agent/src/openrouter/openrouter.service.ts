@@ -123,7 +123,7 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
         model,
         messages: openrouterMessages,
         max_tokens: maxTokens,
-        temperature: 0.7,
+        temperature: 0.1,
       };
 
       if (useTools) {

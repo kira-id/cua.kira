@@ -287,7 +287,8 @@ export class AgentProcessor {
           const summaryResponse = await service.generateMessage(
             SUMMARIZATION_SYSTEM_PROMPT,
             [
-              ...messages,
+              // Only include unsummarized messages, not the previous summary
+              ...unsummarizedMessages,
               {
                 id: '',
                 createdAt: new Date(),

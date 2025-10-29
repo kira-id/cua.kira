@@ -1,10 +1,23 @@
-import { IsNumber } from 'class-validator';
+import { IsNumber, Min, Max } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class CoordinatesDto {
   @IsNumber()
+  @Min(0)
+  @Transform(({ value }) => {
+    // Ensure non-negative values
+    const num = Number(value);
+    return isNaN(num) ? 0 : Math.max(0, num);
+  })
   x: number;
 
   @IsNumber()
+  @Min(0)
+  @Transform(({ value }) => {
+    // Ensure non-negative values
+    const num = Number(value);
+    return isNaN(num) ? 0 : Math.max(0, num);
+  })
   y: number;
 }
 

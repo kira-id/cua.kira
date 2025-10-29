@@ -11,9 +11,9 @@ COPY ./bytebot-agent/ ./bytebot-agent/
 
 WORKDIR /app/bytebot-agent
 
-# Install dependencies
+# Install dependencies with optimized settings
+RUN npm config set fetch-timeout 600000
 RUN npm install
-
 
 RUN npm run build
 

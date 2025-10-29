@@ -21,6 +21,8 @@ import {
 } from '../agent/agent.types';
 import { BaseProvider } from '../providers/base-provider.interface';
 import { RateLimitError } from '../shared/errors';
+import { extractInlineToolCalls } from '@bytebot/shared';
+import { toolSchemas } from '../agent/agent.tools';
 
 type OpenRouterMessageContentPart = {
   type: string;
@@ -116,10 +118,6 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
         messages,
       );
 
-      this.logger.debug(
-        `Formatted OpenRouter messages: ${this.serializeForLog(openrouterMessages)}`,
-      );
-
       const maxTokens = 8192;
       const body: any = {
         model,
@@ -131,14 +129,9 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
       if (useTools) {
         body.tools = openrouterTools;
         body.tool_choice = 'auto';
-        this.logger.debug(
-          `[DEBUG] OpenRouter tools being sent: ${this.serializeForLog(openrouterTools)}`,
-        );
       } else {
         this.logger.debug(`[DEBUG] OpenRouter tools disabled for this request`);
       }
-
-      this.logger.debug(`Request body payload: ${this.serializeForLog(body)}`);
 
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
@@ -674,95 +667,7 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
     text: string,
     parsedToolCallIds: Set<string>,
   ): { remainingText: string; toolBlocks: ToolUseContentBlock[] } {
-    let remaining = text;
-    const toolBlocks: ToolUseContentBlock[] = [];
-
-    for (const toolName of this.toolNames) {
-      let searchIndex = 0;
-
-      while (searchIndex < remaining.length) {
-        const invocationIndex = remaining.indexOf(`${toolName}(`, searchIndex);
-        if (invocationIndex === -1) {
-          break;
-        }
-
-        const argsStart = remaining.indexOf('{', invocationIndex);
-        if (argsStart === -1) {
-          searchIndex = invocationIndex + toolName.length;
-          continue;
-        }
-
-        const argsEnd = this.findMatchingClosingBrace(remaining, argsStart);
-        if (argsEnd === -1) {
-          searchIndex = invocationIndex + toolName.length;
-          continue;
-        }
-
-        const closingParenIndex = remaining.indexOf(')', argsEnd);
-        if (closingParenIndex === -1) {
-          searchIndex = invocationIndex + toolName.length;
-          continue;
-        }
-
-        const rawArguments = remaining.slice(argsStart, argsEnd + 1);
-        const parsedArguments = this.tryParseJson(rawArguments);
-
-        if (!parsedArguments) {
-          searchIndex = invocationIndex + toolName.length;
-          continue;
-        }
-
-        const toolId = `inline-tool-${parsedToolCallIds.size + toolBlocks.length + 1}`;
-        toolBlocks.push({
-          type: MessageContentType.ToolUse,
-          id: toolId,
-          name: toolName,
-          input: parsedArguments,
-        } as ToolUseContentBlock);
-        parsedToolCallIds.add(toolId);
-
-        remaining =
-          remaining.slice(0, invocationIndex) +
-          remaining.slice(closingParenIndex + 1);
-        searchIndex = invocationIndex;
-      }
-    }
-
-    return {
-      remainingText: remaining.trim(),
-      toolBlocks,
-    };
-  }
-
-  private findMatchingClosingBrace(text: string, startIndex: number): number {
-    let depth = 0;
-
-    for (let i = startIndex; i < text.length; i++) {
-      const char = text[i];
-
-      if (char === '{') {
-        depth++;
-      } else if (char === '}') {
-        depth--;
-
-        if (depth === 0) {
-          return i;
-        }
-      }
-    }
-
-    return -1;
-  }
-
-  private tryParseJson(raw: string): Record<string, unknown> | null {
-    try {
-      return JSON.parse(raw);
-    } catch (error) {
-      this.logger.debug(
-        `Failed to parse inline tool call arguments: ${raw}. ${(error as Error).message}`,
-      );
-      return null;
-    }
+    return extractInlineToolCalls(text, this.toolNames, parsedToolCallIds, toolSchemas);
   }
 
   private handleZeroCompletionTokens(data: OpenRouterResponse): void {

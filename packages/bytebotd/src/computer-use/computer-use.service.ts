@@ -23,6 +23,10 @@ import {
   WriteFileAction,
   ReadFileAction,
   ImageMediaType,
+  normalizeCoordinates,
+  validateCoordinates,
+  sanitizeCoordinates,
+  getScreenDimensions,
 } from '@bytebot/shared';
 
 const execAsync = promisify(exec);
@@ -157,14 +161,44 @@ export class ComputerUseService {
   }
 
   private async moveMouse(action: MoveMouseAction): Promise<void> {
-    await this.nutService.mouseMoveEvent(action.coordinates);
+    try {
+      const normalizedCoordinates = await normalizeCoordinates(action.coordinates, {
+        validate: true,
+        sanitize: true,
+        throwOnInvalid: true,
+      });
+      if (!normalizedCoordinates) {
+        throw new Error('Invalid coordinates for mouse move');
+      }
+      this.logger.debug(`[MOVE DEBUG] Moving mouse to coordinates: (${normalizedCoordinates.x}, ${normalizedCoordinates.y})`);
+      await this.nutService.mouseMoveEvent(normalizedCoordinates);
+    } catch (error) {
+      this.logger.error(`[COORD ERROR] Mouse move failed: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
   private async traceMouse(action: TraceMouseAction): Promise<void> {
     const { path, holdKeys } = action;
 
+    // Normalize all coordinates in the path with validation and sanitization
+    const normalizedPathPromises = path.map(coord =>
+      normalizeCoordinates(coord)
+    );
+    const normalizedPath = (await Promise.all(normalizedPathPromises)).filter(coord => coord !== undefined) as { x: number; y: number }[];
+
+    if (normalizedPath.length === 0) {
+      throw new Error('Invalid coordinates in trace path - no valid coordinates found');
+    }
+
+    if (normalizedPath.length < path.length) {
+      this.logger.warn(`[TRACE DEBUG] Some coordinates were invalid: ${path.length - normalizedPath.length} out of ${path.length} filtered out`);
+    }
+
+    this.logger.debug(`[TRACE DEBUG] Tracing mouse path with ${normalizedPath.length} coordinates`);
+
     // Move to the first coordinate
-    await this.nutService.mouseMoveEvent(path[0]);
+    await this.nutService.mouseMoveEvent(normalizedPath[0]);
 
     // Hold keys if provided
     if (holdKeys) {
@@ -172,7 +206,7 @@ export class ComputerUseService {
     }
 
     // Move to each coordinate in the path
-    for (const coordinates of path) {
+    for (const coordinates of normalizedPath) {
       await this.nutService.mouseMoveEvent(coordinates);
     }
 
@@ -189,14 +223,25 @@ export class ComputerUseService {
     const safeClickCount = typeof clickCount === 'number' && clickCount >= 1 ? clickCount : 1;
     this.logger.debug(`[CLICK DEBUG] Safe clickCount: ${safeClickCount}`);
 
+    // Normalize coordinates with validation and sanitization
+    const normalizedCoordinates = await normalizeCoordinates(coordinates, {
+      validate: true,
+      sanitize: true,
+      throwOnInvalid: false, // Allow undefined for click without coordinates
+    });
+
+    // Default button to 'left' if not provided
+    const safeButton = button || 'left';
+    this.logger.debug(`[CLICK DEBUG] Safe button: ${safeButton}`);
+
     // Validate and log coordinates
-    if (coordinates) {
-      this.logger.debug(`[CLICK DEBUG] Coordinates provided: x=${coordinates.x}, y=${coordinates.y}`);
-      if (isNaN(coordinates.x) || isNaN(coordinates.y)) {
-        this.logger.warn(`[CLICK DEBUG] Invalid coordinates: x=${coordinates.x}, y=${coordinates.y}`);
-        throw new Error(`Invalid coordinates for mouse click: (${coordinates.x}, ${coordinates.y})`);
+    if (normalizedCoordinates) {
+      this.logger.debug(`[CLICK DEBUG] Coordinates provided: x=${normalizedCoordinates.x}, y=${normalizedCoordinates.y}`);
+      if (isNaN(normalizedCoordinates.x) || isNaN(normalizedCoordinates.y)) {
+        this.logger.warn(`[CLICK DEBUG] Invalid coordinates after normalization: x=${normalizedCoordinates.x}, y=${normalizedCoordinates.y}`);
+        throw new Error(`Invalid coordinates for mouse click: (${normalizedCoordinates.x}, ${normalizedCoordinates.y})`);
       }
-      await this.nutService.mouseMoveEvent(coordinates);
+      await this.nutService.mouseMoveEvent(normalizedCoordinates);
       this.logger.debug(`[CLICK DEBUG] Mouse moved to coordinates`);
     } else {
       this.logger.debug(`[CLICK DEBUG] No coordinates provided, using current position`);
@@ -213,13 +258,13 @@ export class ComputerUseService {
       this.logger.debug(`[CLICK DEBUG] Performing ${safeClickCount} clicks`);
       // Perform multiple clicks
       for (let i = 0; i < safeClickCount; i++) {
-        await this.nutService.mouseClickEvent(button);
+        await this.nutService.mouseClickEvent(safeButton);
         await this.delay(150);
       }
     } else {
-      this.logger.debug(`[CLICK DEBUG] Performing single click with button: ${button}`);
+      this.logger.debug(`[CLICK DEBUG] Performing single click with button: ${safeButton}`);
       // Perform a single click
-      await this.nutService.mouseClickEvent(button);
+      await this.nutService.mouseClickEvent(safeButton);
     }
 
     // Release hold keys
@@ -233,9 +278,16 @@ export class ComputerUseService {
   private async pressMouse(action: PressMouseAction): Promise<void> {
     const { coordinates, button, press } = action;
 
+    // Normalize coordinates with validation and sanitization
+    const normalizedCoordinates = await normalizeCoordinates(coordinates, {
+      validate: true,
+      sanitize: true,
+      throwOnInvalid: false, // Allow undefined for scroll without coordinates
+    });
+
     // Move to coordinates if provided
-    if (coordinates) {
-      await this.nutService.mouseMoveEvent(coordinates);
+    if (normalizedCoordinates) {
+      await this.nutService.mouseMoveEvent(normalizedCoordinates);
     }
 
     // Perform press
@@ -249,8 +301,21 @@ export class ComputerUseService {
   private async dragMouse(action: DragMouseAction): Promise<void> {
     const { path, button, holdKeys } = action;
 
+    // Normalize all coordinates in the path with validation and sanitization
+    const normalizedPathPromises = path.map(coord =>
+      normalizeCoordinates(coord, { validate: true, sanitize: true, throwOnInvalid: false })
+    );
+    const normalizedPath = (await Promise.all(normalizedPathPromises)).filter(coord => coord !== undefined) as { x: number; y: number }[];
+    if (normalizedPath.length === 0) {
+      throw new Error('Invalid coordinates in drag path - no valid coordinates found');
+    }
+
+    if (normalizedPath.length < path.length) {
+      this.logger.warn(`[DRAG DEBUG] Some coordinates were invalid: ${path.length - normalizedPath.length} out of ${path.length} filtered out`);
+    }
+
     // Move to the first coordinate
-    await this.nutService.mouseMoveEvent(path[0]);
+    await this.nutService.mouseMoveEvent(normalizedPath[0]);
 
     // Hold keys if provided
     if (holdKeys) {
@@ -259,7 +324,7 @@ export class ComputerUseService {
 
     // Perform drag
     await this.nutService.mouseButtonEvent(button, true);
-    for (const coordinates of path) {
+    for (const coordinates of normalizedPath) {
       await this.nutService.mouseMoveEvent(coordinates);
     }
     await this.nutService.mouseButtonEvent(button, false);
@@ -273,9 +338,16 @@ export class ComputerUseService {
   private async scroll(action: ScrollAction): Promise<void> {
     const { coordinates, direction, scrollCount, holdKeys } = action;
 
+    // Normalize coordinates with validation and sanitization
+    const normalizedCoordinates = await normalizeCoordinates(coordinates, {
+      validate: true,
+      sanitize: true,
+      throwOnInvalid: false, // Allow undefined for press without coordinates
+    });
+
     // Move to coordinates if provided
-    if (coordinates) {
-      await this.nutService.mouseMoveEvent(coordinates);
+    if (normalizedCoordinates) {
+      await this.nutService.mouseMoveEvent(normalizedCoordinates);
     }
 
     // Hold keys if provided

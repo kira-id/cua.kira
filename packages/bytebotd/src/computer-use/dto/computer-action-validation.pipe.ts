@@ -24,6 +24,7 @@ import {
   WriteFileActionDto,
   ReadFileActionDto,
 } from './computer-action.dto';
+import { ButtonType } from './base.dto';
 
 @Injectable()
 export class ComputerActionValidationPipe implements PipeTransform {
@@ -44,7 +45,11 @@ export class ComputerActionValidationPipe implements PipeTransform {
         dto = plainToClass(TraceMouseActionDto, value);
         break;
       case 'click_mouse':
-        dto = plainToClass(ClickMouseActionDto, value);
+        dto = plainToClass(ClickMouseActionDto, value, { enableImplicitConversion: true });
+        // Apply default button if not provided
+        if (!dto.button) {
+          dto.button = 'left';
+        }
         break;
       case 'press_mouse':
         dto = plainToClass(PressMouseActionDto, value);

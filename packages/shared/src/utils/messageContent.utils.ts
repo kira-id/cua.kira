@@ -1,539 +1,515 @@
+// Utility functions for message content parsing and validation
+
 import {
-  MessageContentBlock,
   MessageContentType,
+  ToolUseContentBlock,
+  MessageContentBlock,
   TextContentBlock,
   ImageContentBlock,
-  DocumentContentBlock,
-  ToolUseContentBlock,
-  ComputerToolUseContentBlock,
   ToolResultContentBlock,
-  MoveMouseToolUseBlock,
-  TraceMouseToolUseBlock,
-  ClickMouseToolUseBlock,
-  PressMouseToolUseBlock,
+  ThinkingContentBlock,
+  RedactedThinkingContentBlock,
+  UserActionContentBlock,
+  ComputerToolUseContentBlock,
   TypeKeysToolUseBlock,
   PressKeysToolUseBlock,
   TypeTextToolUseBlock,
   WaitToolUseBlock,
-  ScreenshotToolUseBlock,
-  CursorPositionToolUseBlock,
-  DragMouseToolUseBlock,
   ScrollToolUseBlock,
   ApplicationToolUseBlock,
+  PasteTextToolUseBlock,
+  ReadFileToolUseBlock,
+  CursorPositionToolUseBlock,
+  MoveMouseToolUseBlock,
+  ScreenshotToolUseBlock,
+  ClickMouseToolUseBlock,
+  DragMouseToolUseBlock,
+  PressMouseToolUseBlock,
+  TraceMouseToolUseBlock,
   SetTaskStatusToolUseBlock,
   CreateTaskToolUseBlock,
-  ThinkingContentBlock,
-  RedactedThinkingContentBlock,
-  PasteTextToolUseBlock,
-  WriteFileToolUseBlock,
-  ReadFileToolUseBlock,
-  UserActionContentBlock,
-} from "../types/messageContent.types";
-import { Coordinates } from "../types/computerAction.types";
+} from '../types/messageContent.types';
+
+// Simple logger shim for shared utils
+const logger = {
+  debug: (message: string) => {
+    console.debug(`[MessageContentUtils] ${message}`);
+  },
+  warn: (message: string) => {
+    console.warn(`[MessageContentUtils] ${message}`);
+  },
+};
 
 /**
- * Type guard to check if an object is a TextContentBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is TextContentBlock
+ * Interface for parsed tool call result
  */
-export function isTextContentBlock(obj: unknown): obj is TextContentBlock {
-  if (!obj || typeof obj !== "object") {
-    return false;
-  }
-
-  const block = obj as Partial<TextContentBlock>;
-  return (
-    block.type === MessageContentType.Text && typeof block.text === "string"
-  );
-}
-
-export function isThinkingContentBlock(
-  obj: unknown
-): obj is ThinkingContentBlock {
-  if (!obj || typeof obj !== "object") {
-    return false;
-  }
-
-  const block = obj as Partial<ThinkingContentBlock>;
-  return (
-    block.type === MessageContentType.Thinking &&
-    typeof block.thinking === "string" &&
-    typeof block.signature === "string"
-  );
-}
-
-export function isRedactedThinkingContentBlock(
-  obj: unknown
-): obj is RedactedThinkingContentBlock {
-  if (!obj || typeof obj !== "object") {
-    return false;
-  }
-
-  const block = obj as Partial<RedactedThinkingContentBlock>;
-  return (
-    block.type === MessageContentType.RedactedThinking &&
-    typeof block.data === "string"
-  );
+export interface ParsedToolCall {
+  remainingText: string;
+  toolBlocks: ToolUseContentBlock[];
 }
 
 /**
- * Type guard to check if an object is an ImageContentBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is ImageContentBlock
+ * Comprehensive tool call parsing from text, supporting multiple formats:
+ * - computer_click_mouse({x: 100, y: 200})
+ * - computer_click_mouse({"x": 100, "y": 200})
+ * - computer_click_mouse(x=100, y=200) - Python-style
+ * - Tool: computer_click_mouse with args: {x: 100, y: 200}
  */
-export function isImageContentBlock(obj: unknown): obj is ImageContentBlock {
-  if (!obj || typeof obj !== "object") {
-    return false;
+export function parseToolCallsFromText(
+  text: string,
+  toolNames: Set<string>,
+  parsedToolCallIds: Set<string>
+): ParsedToolCall {
+  let remaining = text;
+  const toolBlocks: ToolUseContentBlock[] = [];
+
+  // Pattern 1: Function call syntax - toolName(args)
+  const functionCallPattern = /([a-zA-Z_][a-zA-Z0-9_]*)\s*\(\s*([^)]*)\s*\)/g;
+
+  // Pattern 2: Python-style function calls - toolName(arg=value, ...)
+  const pythonCallPattern = /([a-zA-Z_][a-zA-Z0-9_]*)\s*\(\s*([^)]*)\s*\)/g;
+
+  // Pattern 3: Natural language tool calls - "Tool: toolName with args: {...}"
+  const naturalLanguagePattern = /Tool:\s*([a-zA-Z_][a-zA-Z0-9_]*).*?args?:\s*(\{[^}]*\})/gi;
+
+  // Process all patterns
+  const patterns = [functionCallPattern, pythonCallPattern, naturalLanguagePattern];
+
+  for (const pattern of patterns) {
+    let match;
+    let searchOffset = 0;
+
+    while ((match = pattern.exec(remaining)) !== null) {
+      const toolName = match[1];
+      let argsString = match[2];
+
+      // Skip if not a valid tool name
+      if (!toolNames.has(toolName)) {
+        searchOffset = match.index + match[0].length;
+        continue;
+      }
+
+      let parsedArgs: Record<string, unknown> | null = null;
+
+      // Try to parse arguments based on pattern
+      if (pattern === naturalLanguagePattern) {
+        // Natural language format - argsString is already the JSON part
+        parsedArgs = parseJsonArgs(argsString);
+      } else if (pattern === pythonCallPattern && argsString.includes('=')) {
+        // Python-style arguments
+        parsedArgs = parsePythonArgs(argsString);
+      } else {
+        // Standard JSON arguments
+        parsedArgs = parseJsonArgs(argsString);
+      }
+
+      if (!parsedArgs) {
+        logger.debug(`Failed to parse arguments for tool ${toolName}: ${argsString}`);
+        searchOffset = match.index + match[0].length;
+        continue;
+      }
+
+      // Create tool block
+      const toolId = `inline-tool-${parsedToolCallIds.size + toolBlocks.length + 1}`;
+      toolBlocks.push({
+        type: MessageContentType.ToolUse,
+        id: toolId,
+        name: toolName,
+        input: parsedArgs,
+      } as ToolUseContentBlock);
+
+      parsedToolCallIds.add(toolId);
+
+      // Remove the tool call from remaining text
+      remaining =
+        remaining.slice(0, match.index) +
+        remaining.slice(match.index + match[0].length);
+
+      // Reset pattern lastIndex since we modified the string
+      pattern.lastIndex = match.index;
+    }
   }
 
-  const block = obj as Partial<ImageContentBlock>;
-  return (
-    block.type === MessageContentType.Image &&
-    block.source !== undefined &&
-    typeof block.source === "object" &&
-    typeof block.source.media_type === "string" &&
-    typeof block.source.type === "string" &&
-    typeof block.source.data === "string"
-  );
+  return {
+    remainingText: remaining.trim(),
+    toolBlocks,
+  };
 }
 
-export function isUserActionContentBlock(
-  obj: unknown
-): obj is UserActionContentBlock {
-  if (!obj || typeof obj !== "object") {
+/**
+ * Parse JSON-style arguments
+ */
+function parseJsonArgs(argsString: string): Record<string, unknown> | null {
+  try {
+    // Handle both single quotes and double quotes
+    let jsonString = argsString.trim();
+
+    // Convert single quotes to double quotes for valid JSON
+    jsonString = jsonString.replace(/'/g, '"');
+
+    // Handle unquoted keys
+    jsonString = jsonString.replace(/([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '"$1":');
+
+    return JSON.parse(jsonString);
+  } catch (error) {
+    logger.debug(`JSON parse failed for: ${argsString}, error: ${(error as Error).message}`);
+    return null;
+  }
+}
+
+/**
+ * Parse Python-style arguments (key=value, key2=value2)
+ */
+function parsePythonArgs(argsString: string): Record<string, unknown> | null {
+  try {
+    const result: Record<string, unknown> = {};
+    const pairs = argsString.split(',').map(pair => pair.trim());
+
+    for (const pair of pairs) {
+      if (!pair) continue;
+
+      const [key, ...valueParts] = pair.split('=');
+      if (!key || valueParts.length === 0) continue;
+
+      const keyName = key.trim();
+      const valueString = valueParts.join('=').trim();
+
+      // Try to parse as JSON first, then fallback to string
+      try {
+        result[keyName] = JSON.parse(valueString);
+      } catch {
+        // Remove quotes if present
+        let cleanValue = valueString;
+        if ((cleanValue.startsWith('"') && cleanValue.endsWith('"')) ||
+            (cleanValue.startsWith("'") && cleanValue.endsWith("'"))) {
+          cleanValue = cleanValue.slice(1, -1);
+        }
+        result[keyName] = cleanValue;
+      }
+    }
+
+    return result;
+  } catch (error) {
+    logger.debug(`Python args parse failed for: ${argsString}, error: ${(error as Error).message}`);
+    return null;
+  }
+}
+
+/**
+ * Validate tool arguments against expected schema
+ */
+export function validateToolArguments(
+  toolName: string,
+  args: Record<string, unknown>,
+  toolSchemas: Record<string, any>
+): boolean {
+  const schema = toolSchemas[toolName];
+  if (!schema) {
+    logger.warn(`No schema found for tool: ${toolName}`);
     return false;
   }
 
-  const block = obj as Partial<UserActionContentBlock>;
+  // Basic validation for required fields
+  if (schema.required) {
+    for (const required of schema.required) {
+      if (!(required in args)) {
+        logger.warn(`Missing required argument '${required}' for tool ${toolName}`);
+        return false;
+      }
+    }
+  }
 
+  // Type validation
+  if (schema.properties) {
+    for (const [key, value] of Object.entries(args)) {
+      const propSchema = schema.properties[key];
+      if (!propSchema) {
+        logger.warn(`Unknown argument '${key}' for tool ${toolName}`);
+        continue; // Allow unknown args but warn
+      }
+
+      if (!validateArgumentType(value, propSchema)) {
+        logger.warn(`Invalid type for argument '${key}' in tool ${toolName}`);
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Validate individual argument type
+ */
+function validateArgumentType(value: unknown, schema: any): boolean {
+  const { type, enum: enumValues } = schema;
+
+  // Check enum first
+  if (enumValues && Array.isArray(enumValues)) {
+    return enumValues.includes(value);
+  }
+
+  // Type checking
+  switch (type) {
+    case 'string':
+      return typeof value === 'string';
+    case 'number':
+      return typeof value === 'number' && !isNaN(value);
+    case 'integer':
+      return typeof value === 'number' && Number.isInteger(value);
+    case 'boolean':
+      return typeof value === 'boolean';
+    case 'array':
+      return Array.isArray(value);
+    case 'object':
+      return typeof value === 'object' && value !== null && !Array.isArray(value);
+    default:
+      return true; // Allow unknown types
+  }
+}
+
+/**
+ * Sanitize and normalize tool arguments
+ */
+export function sanitizeToolArguments(args: Record<string, unknown>): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(args)) {
+    // Convert string numbers to actual numbers
+    if (typeof value === 'string') {
+      const numValue = Number(value);
+      if (!isNaN(numValue) && value.trim() === numValue.toString()) {
+        sanitized[key] = numValue;
+        continue;
+      }
+
+      // Convert string booleans
+      if (value.toLowerCase() === 'true') {
+        sanitized[key] = true;
+        continue;
+      }
+      if (value.toLowerCase() === 'false') {
+        sanitized[key] = false;
+        continue;
+      }
+    }
+
+    sanitized[key] = value;
+  }
+
+  return sanitized;
+}
+
+// Legacy function for backward compatibility - use extractInlineToolCalls instead
+export function extractInlineToolCallsLegacy(
+  text: string,
+  toolNames: Set<string>,
+  parsedToolCallIds: Set<string>
+): ParsedToolCall {
+  return extractInlineToolCalls(text, toolNames, parsedToolCallIds);
+}
+
+/**
+ * Enhanced inline tool call extraction with validation
+ */
+export function extractInlineToolCalls(
+  text: string,
+  toolNames: Set<string>,
+  parsedToolCallIds: Set<string>,
+  toolSchemas?: Record<string, any>
+): ParsedToolCall {
+  const result = parseToolCallsFromText(text, toolNames, parsedToolCallIds);
+
+  // Validate and sanitize each tool call
+  const validToolBlocks: ToolUseContentBlock[] = [];
+
+  for (const toolBlock of result.toolBlocks) {
+    let sanitizedArgs = sanitizeToolArguments(toolBlock.input);
+
+    // Validate if schemas are provided
+    if (toolSchemas && !validateToolArguments(toolBlock.name, sanitizedArgs, toolSchemas)) {
+      logger.warn(`Invalid arguments for tool ${toolBlock.name}, skipping: ${JSON.stringify(sanitizedArgs)}`);
+      continue;
+    }
+
+    validToolBlocks.push({
+      ...toolBlock,
+      input: sanitizedArgs,
+    });
+  }
+
+  return {
+    remainingText: result.remainingText,
+    toolBlocks: validToolBlocks,
+  };
+}
+
+// Type guards for message content blocks
+
+/**
+ * Type guard for TextContentBlock
+ */
+export function isTextContentBlock(block: MessageContentBlock): block is TextContentBlock {
+  return block.type === MessageContentType.Text;
+}
+
+/**
+ * Type guard for ImageContentBlock
+ */
+export function isImageContentBlock(block: MessageContentBlock): block is ImageContentBlock {
+  return block.type === MessageContentType.Image;
+}
+
+/**
+ * Type guard for ToolUseContentBlock
+ */
+export function isToolUseContentBlock(block: MessageContentBlock): block is ToolUseContentBlock {
+  return block.type === MessageContentType.ToolUse;
+}
+
+/**
+ * Type guard for ToolResultContentBlock
+ */
+export function isToolResultContentBlock(block: MessageContentBlock): block is ToolResultContentBlock {
+  return block.type === MessageContentType.ToolResult;
+}
+
+/**
+ * Type guard for ThinkingContentBlock
+ */
+export function isThinkingContentBlock(block: MessageContentBlock): block is ThinkingContentBlock {
+  return block.type === MessageContentType.Thinking;
+}
+
+/**
+ * Type guard for RedactedThinkingContentBlock
+ */
+export function isRedactedThinkingContentBlock(block: MessageContentBlock): block is RedactedThinkingContentBlock {
+  return block.type === MessageContentType.RedactedThinking;
+}
+
+/**
+ * Type guard for UserActionContentBlock
+ */
+export function isUserActionContentBlock(block: MessageContentBlock): block is UserActionContentBlock {
   return block.type === MessageContentType.UserAction;
 }
 
 /**
- * Type guard to check if an object is a DocumentContentBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is DocumentContentBlock
+ * Type guard for ComputerToolUseContentBlock
  */
-export function isDocumentContentBlock(
-  obj: unknown
-): obj is DocumentContentBlock {
-  if (!obj || typeof obj !== "object") {
-    return false;
-  }
-
-  const block = obj as Partial<DocumentContentBlock>;
-  return (
-    block.type === MessageContentType.Document &&
-    block.source !== undefined &&
-    typeof block.source === "object" &&
-    typeof block.source.type === "string" &&
-    typeof block.source.media_type === "string" &&
-    typeof block.source.data === "string"
+export function isComputerToolUseContentBlock(block: MessageContentBlock): block is ComputerToolUseContentBlock {
+  return block.type === MessageContentType.ToolUse && (
+    block.name.startsWith('computer_') ||
+    block.name === 'set_task_status' ||
+    block.name === 'create_task'
   );
 }
 
 /**
- * Type guard to check if an object is a ToolUseContentBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is ToolUseContentBlock
+ * Type guard for SetTaskStatusToolUseBlock
  */
-export function isToolUseContentBlock(
-  obj: unknown
-): obj is ToolUseContentBlock {
-  if (!obj || typeof obj !== "object") {
-    return false;
-  }
-
-  const block = obj as Partial<ToolUseContentBlock>;
-  return (
-    block.type === MessageContentType.ToolUse &&
-    typeof block.name === "string" &&
-    typeof block.id === "string" &&
-    block.input !== undefined &&
-    typeof block.input === "object"
-  );
+export function isSetTaskStatusToolUseBlock(block: MessageContentBlock): block is SetTaskStatusToolUseBlock {
+  return block.type === MessageContentType.ToolUse && block.name === 'set_task_status';
 }
 
 /**
- * Type guard to check if an object is a ComputerToolUseContentBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is ComputerToolUseContentBlock
+ * Type guard for CreateTaskToolUseBlock
  */
-export function isComputerToolUseContentBlock(
-  obj: unknown
-): obj is ComputerToolUseContentBlock {
-  if (!isToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  return (obj as ToolUseContentBlock).name.startsWith("computer_");
+export function isCreateTaskToolUseBlock(block: MessageContentBlock): block is CreateTaskToolUseBlock {
+  return block.type === MessageContentType.ToolUse && block.name === 'create_task';
 }
 
 /**
- * Type guard to check if an object is a ToolResultContentBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is ToolResultContentBlock
+ * Type guard for TypeKeysToolUseBlock
  */
-export function isToolResultContentBlock(
-  obj: unknown
-): obj is ToolResultContentBlock {
-  if (!obj || typeof obj !== "object") {
-    return false;
-  }
-
-  const block = obj as Partial<ToolResultContentBlock>;
-  return (
-    block.type === MessageContentType.ToolResult &&
-    typeof block.tool_use_id === "string"
-  );
+export function isTypeKeysToolUseBlock(block: MessageContentBlock): block is TypeKeysToolUseBlock {
+  return block.type === MessageContentType.ToolUse && block.name === 'computer_type_keys';
 }
 
 /**
- * Type guard to check if an object is any type of MessageContentBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is MessageContentBlock
+ * Type guard for PressKeysToolUseBlock
  */
-export function isMessageContentBlock(
-  obj: unknown
-): obj is MessageContentBlock {
-  return (
-    isTextContentBlock(obj) ||
-    isImageContentBlock(obj) ||
-    isDocumentContentBlock(obj) ||
-    isToolUseContentBlock(obj) ||
-    isToolResultContentBlock(obj) ||
-    isThinkingContentBlock(obj) ||
-    isRedactedThinkingContentBlock(obj) ||
-    isUserActionContentBlock(obj)
-  );
+export function isPressKeysToolUseBlock(block: MessageContentBlock): block is PressKeysToolUseBlock {
+  return block.type === MessageContentType.ToolUse && block.name === 'computer_press_keys';
 }
 
 /**
- * Determines the specific type of MessageContentBlock for a given object.
- * This doesn't narrow the type but can be useful for debugging or logging.
- * @param obj The object to check (should be a MessageContentBlock)
- * @returns A string indicating the specific type, or null if not a valid MessageContentBlock
+ * Type guard for TypeTextToolUseBlock
  */
-export function getMessageContentBlockType(obj: unknown): string | null {
-  if (!obj || typeof obj !== "object") {
-    return null;
-  }
-
-  if (isTextContentBlock(obj)) {
-    return "TextContentBlock";
-  }
-
-  if (isImageContentBlock(obj)) {
-    return "ImageContentBlock";
-  }
-
-  if (isDocumentContentBlock(obj)) {
-    return "DocumentContentBlock";
-  }
-
-  if (isThinkingContentBlock(obj)) {
-    return "ThinkingContentBlock";
-  }
-
-  if (isRedactedThinkingContentBlock(obj)) {
-    return "RedactedThinkingContentBlock";
-  }
-
-  if (isComputerToolUseContentBlock(obj)) {
-    const computerBlock = obj as ComputerToolUseContentBlock;
-    if (computerBlock.input && typeof computerBlock.input === "object") {
-      return `ComputerToolUseContentBlock:${computerBlock.name.replace(
-        "computer_",
-        ""
-      )}`;
-    }
-    return "ComputerToolUseContentBlock";
-  }
-
-  if (isToolUseContentBlock(obj)) {
-    return "ToolUseContentBlock";
-  }
-
-  if (isToolResultContentBlock(obj)) {
-    return "ToolResultContentBlock";
-  }
-
-  return null;
+export function isTypeTextToolUseBlock(block: MessageContentBlock): block is TypeTextToolUseBlock {
+  return block.type === MessageContentType.ToolUse && block.name === 'computer_type_text';
 }
 
 /**
- * Type guard to check if an object is a MoveMouseToolUseBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is MoveMouseToolUseBlock
+ * Type guard for WaitToolUseBlock
  */
-export function isMoveMouseToolUseBlock(
-  obj: unknown
-): obj is MoveMouseToolUseBlock {
-  if (!isComputerToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  const block = obj as Record<string, any>;
-  return block.name === "computer_move_mouse";
-}
-
 /**
- * Type guard to check if an object is a TraceMouseToolUseBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is TraceMouseToolUseBlock
+ * Type guard for ScrollToolUseBlock
  */
-export function isTraceMouseToolUseBlock(
-  obj: unknown
-): obj is TraceMouseToolUseBlock {
-  if (!isComputerToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  const block = obj as Record<string, any>;
-  return block.name === "computer_trace_mouse";
-}
-
 /**
- * Type guard to check if an object is a ClickMouseToolUseBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is ClickMouseToolUseBlock
+ * Type guard for ApplicationToolUseBlock
  */
-export function isClickMouseToolUseBlock(
-  obj: unknown
-): obj is ClickMouseToolUseBlock {
-  if (!isComputerToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  const block = obj as Record<string, any>;
-  return block.name === "computer_click_mouse";
-}
-
 /**
- * Type guard to check if an object is a CursorPositionToolUseBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is CursorPositionToolUseBlock
+ * Type guard for PasteTextToolUseBlock
  */
-export function isCursorPositionToolUseBlock(
-  obj: unknown
-): obj is CursorPositionToolUseBlock {
-  if (!isComputerToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  const block = obj as Record<string, any>;
-  return block.name === "computer_cursor_position";
-}
-
 /**
- * Type guard to check if an object is a PressMouseToolUseBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is PressMouseToolUseBlock
+ * Type guard for ReadFileToolUseBlock
  */
-export function isPressMouseToolUseBlock(
-  obj: unknown
-): obj is PressMouseToolUseBlock {
-  if (!isComputerToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  const block = obj as Record<string, any>;
-  return block.name === "computer_press_mouse";
-}
-
 /**
- * Type guard to check if an object is a DragMouseToolUseBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is DragMouseToolUseBlock
+ * Type guard for CursorPositionToolUseBlock
  */
-export function isDragMouseToolUseBlock(
-  obj: unknown
-): obj is DragMouseToolUseBlock {
-  if (!isComputerToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  const block = obj as Record<string, any>;
-  return block.name === "computer_drag_mouse";
-}
-
 /**
- * Type guard to check if an object is a ScrollToolUseBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is ScrollToolUseBlock
+ * Type guard for MoveMouseToolUseBlock
  */
-export function isScrollToolUseBlock(obj: unknown): obj is ScrollToolUseBlock {
-  if (!isComputerToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  const block = obj as Record<string, any>;
-  return block.name === "computer_scroll";
-}
-
 /**
- * Type guard to check if an object is a TypeKeysToolUseBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is TypeKeysToolUseBlock
+ * Type guard for ScreenshotToolUseBlock
  */
-export function isTypeKeysToolUseBlock(
-  obj: unknown
-): obj is TypeKeysToolUseBlock {
-  if (!isComputerToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  const block = obj as Record<string, any>;
-  return block.name === "computer_type_keys";
-}
-
 /**
- * Type guard to check if an object is a PressKeysToolUseBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is PressKeysToolUseBlock
+ * Type guard for ClickMouseToolUseBlock
  */
-export function isPressKeysToolUseBlock(
-  obj: unknown
-): obj is PressKeysToolUseBlock {
-  if (!isComputerToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  const block = obj as Record<string, any>;
-  return block.name === "computer_press_keys";
-}
-
 /**
- * Type guard to check if an object is a TypeTextToolUseBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is TypeTextToolUseBlock
+ * Type guard for DragMouseToolUseBlock
  */
-export function isTypeTextToolUseBlock(
-  obj: unknown
-): obj is TypeTextToolUseBlock {
-  if (!isComputerToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  const block = obj as Record<string, any>;
-  return block.name === "computer_type_text";
-}
-
-export function isPasteTextToolUseBlock(
-  obj: unknown
-): obj is PasteTextToolUseBlock {
-  if (!isComputerToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  const block = obj as Record<string, any>;
-  return block.name === "computer_paste_text";
-}
-
 /**
- * Type guard to check if an object is a WaitToolUseBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is WaitToolUseBlock
+ * Type guard for PressMouseToolUseBlock
  */
-export function isWaitToolUseBlock(obj: unknown): obj is WaitToolUseBlock {
-  if (!isComputerToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  const block = obj as Record<string, any>;
-  return block.name === "computer_wait";
-}
-
 /**
- * Type guard to check if an object is a ScreenshotToolUseBlock
- * @param obj The object to validate
- * @returns Type predicate indicating obj is ScreenshotToolUseBlock
+ * Type guard for TraceMouseToolUseBlock
  */
-export function isScreenshotToolUseBlock(
-  obj: unknown
-): obj is ScreenshotToolUseBlock {
-  if (!isComputerToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  const block = obj as Record<string, any>;
-  return block.name === "computer_screenshot";
+export function isTraceMouseToolUseBlock(block: MessageContentBlock): block is TraceMouseToolUseBlock {
+  return block.type === MessageContentType.ToolUse && block.name === 'computer_trace_mouse';
 }
-
-export function isApplicationToolUseBlock(
-  obj: unknown
-): obj is ApplicationToolUseBlock {
-  if (!isComputerToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  const block = obj as Record<string, any>;
-  return block.name === "computer_application";
+export function isPressMouseToolUseBlock(block: MessageContentBlock): block is PressMouseToolUseBlock {
+  return block.type === MessageContentType.ToolUse && block.name === 'computer_press_mouse';
 }
-
-export function isSetTaskStatusToolUseBlock(
-  obj: unknown
-): obj is SetTaskStatusToolUseBlock {
-  if (!isToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  const block = obj as Record<string, any>;
-  return block.name === "set_task_status";
+export function isDragMouseToolUseBlock(block: MessageContentBlock): block is DragMouseToolUseBlock {
+  return block.type === MessageContentType.ToolUse && block.name === 'computer_drag_mouse';
 }
-
-export function isCreateTaskToolUseBlock(
-  obj: unknown
-): obj is CreateTaskToolUseBlock {
-  if (!isToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  const block = obj as Record<string, any>;
-  return block.name === "create_task";
+export function isClickMouseToolUseBlock(block: MessageContentBlock): block is ClickMouseToolUseBlock {
+  return block.type === MessageContentType.ToolUse && block.name === 'computer_click_mouse';
 }
-
-export function isWriteFileToolUseBlock(
-  obj: unknown
-): obj is WriteFileToolUseBlock {
-  if (!isComputerToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  const block = obj as Record<string, any>;
-  return block.name === "computer_write_file";
+export function isScreenshotToolUseBlock(block: MessageContentBlock): block is ScreenshotToolUseBlock {
+  return block.type === MessageContentType.ToolUse && block.name === 'computer_screenshot';
 }
-
-export function isReadFileToolUseBlock(
-  obj: unknown
-): obj is ReadFileToolUseBlock {
-  if (!isComputerToolUseContentBlock(obj)) {
-    return false;
-  }
-
-  const block = obj as Record<string, any>;
-  return block.name === "computer_read_file";
+export function isMoveMouseToolUseBlock(block: MessageContentBlock): block is MoveMouseToolUseBlock {
+  return block.type === MessageContentType.ToolUse && block.name === 'computer_move_mouse';
 }
-
-/**
- * Normalizes coordinates from either array [x, y] or object {x, y} format
- * to the expected Coordinates object format.
- */
-export function normalizeCoordinates(coordinates: Coordinates | [number, number] | undefined): Coordinates | undefined {
-  if (!coordinates) {
-    return undefined;
-  }
-
-  // If it's already an object with x,y properties
-  if (typeof coordinates === 'object' && 'x' in coordinates && 'y' in coordinates) {
-    return coordinates as Coordinates;
-  }
-
-  // If it's an array [x, y]
-  if (Array.isArray(coordinates) && coordinates.length === 2) {
-    return { x: coordinates[0], y: coordinates[1] };
-  }
-
-  // Invalid format
-  return undefined;
+export function isCursorPositionToolUseBlock(block: MessageContentBlock): block is CursorPositionToolUseBlock {
+  return block.type === MessageContentType.ToolUse && block.name === 'computer_cursor_position';
+}
+export function isReadFileToolUseBlock(block: MessageContentBlock): block is ReadFileToolUseBlock {
+  return block.type === MessageContentType.ToolUse && block.name === 'computer_read_file';
+}
+export function isPasteTextToolUseBlock(block: MessageContentBlock): block is PasteTextToolUseBlock {
+  return block.type === MessageContentType.ToolUse && block.name === 'computer_paste_text';
+}
+export function isApplicationToolUseBlock(block: MessageContentBlock): block is ApplicationToolUseBlock {
+  return block.type === MessageContentType.ToolUse && block.name === 'computer_application';
+}
+export function isScrollToolUseBlock(block: MessageContentBlock): block is ScrollToolUseBlock {
+  return block.type === MessageContentType.ToolUse && block.name === 'computer_scroll';
+}
+export function isWaitToolUseBlock(block: MessageContentBlock): block is WaitToolUseBlock {
+  return block.type === MessageContentType.ToolUse && block.name === 'computer_wait';
 }

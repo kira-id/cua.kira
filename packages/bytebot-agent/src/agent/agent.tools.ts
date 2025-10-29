@@ -404,3 +404,26 @@ export const agentTools = [
   _createTaskTool,
   _readFileTool,
 ];
+
+/**
+ * Tool schemas map for validation
+ */
+export const toolSchemas: Record<string, any> = {
+  computer_move_mouse: _moveMouseTool.input_schema,
+  computer_trace_mouse: _traceMouseTool.input_schema,
+  computer_click_mouse: _clickMouseTool.input_schema,
+  computer_press_mouse: _pressMouseTool.input_schema,
+  computer_drag_mouse: _dragMouseTool.input_schema,
+  computer_scroll: _scrollTool.input_schema,
+  computer_type_keys: _typeKeysTool.input_schema,
+  computer_press_keys: _pressKeysTool.input_schema,
+  computer_type_text: _typeTextTool.input_schema,
+  computer_paste_text: _pasteTextTool.input_schema,
+  computer_wait: _waitTool.input_schema,
+  computer_screenshot: _screenshotTool.input_schema,
+  computer_cursor_position: _cursorPositionTool.input_schema,
+  computer_application: _applicationTool.input_schema,
+  set_task_status: _setTaskStatusTool.input_schema,
+  create_task: _createTaskTool.input_schema,
+  computer_read_file: _readFileTool.input_schema,
+};

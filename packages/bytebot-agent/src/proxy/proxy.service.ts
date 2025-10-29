@@ -24,6 +24,8 @@ import {
   BytebotAgentInterrupt,
   BytebotAgentResponse,
 } from '../agent/agent.types';
+import { extractInlineToolCalls } from '@bytebot/shared';
+import { toolSchemas } from '../agent/agent.tools';
 
 @Injectable()
 export class ProxyService implements BytebotAgentService {
@@ -413,94 +415,6 @@ export class ProxyService implements BytebotAgentService {
     text: string,
     parsedToolCallIds: Set<string>,
   ): { remainingText: string; toolBlocks: ToolUseContentBlock[] } {
-    let remaining = text;
-    const toolBlocks: ToolUseContentBlock[] = [];
-
-    for (const toolName of this.toolNames) {
-      let searchIndex = 0;
-
-      while (searchIndex < remaining.length) {
-        const invocationIndex = remaining.indexOf(`${toolName}(`, searchIndex);
-        if (invocationIndex === -1) {
-          break;
-        }
-
-        const argsStart = remaining.indexOf('{', invocationIndex);
-        if (argsStart === -1) {
-          searchIndex = invocationIndex + toolName.length;
-          continue;
-        }
-
-        const argsEnd = this.findMatchingClosingBrace(remaining, argsStart);
-        if (argsEnd === -1) {
-          searchIndex = invocationIndex + toolName.length;
-          continue;
-        }
-
-        const closingParenIndex = remaining.indexOf(')', argsEnd);
-        if (closingParenIndex === -1) {
-          searchIndex = invocationIndex + toolName.length;
-          continue;
-        }
-
-        const rawArguments = remaining.slice(argsStart, argsEnd + 1);
-        const parsedArguments = this.tryParseJson(rawArguments);
-
-        if (!parsedArguments) {
-          searchIndex = invocationIndex + toolName.length;
-          continue;
-        }
-
-        const toolId = `inline-tool-${parsedToolCallIds.size + toolBlocks.length + 1}`;
-        toolBlocks.push({
-          type: MessageContentType.ToolUse,
-          id: toolId,
-          name: toolName,
-          input: parsedArguments,
-        } as ToolUseContentBlock);
-        parsedToolCallIds.add(toolId);
-
-        remaining =
-          remaining.slice(0, invocationIndex) +
-          remaining.slice(closingParenIndex + 1);
-        searchIndex = invocationIndex;
-      }
-    }
-
-    return {
-      remainingText: remaining.trim(),
-      toolBlocks,
-    };
-  }
-
-  private findMatchingClosingBrace(text: string, startIndex: number): number {
-    let depth = 0;
-
-    for (let i = startIndex; i < text.length; i++) {
-      const char = text[i];
-
-      if (char === '{') {
-        depth++;
-      } else if (char === '}') {
-        depth--;
-
-        if (depth === 0) {
-          return i;
-        }
-      }
-    }
-
-    return -1;
-  }
-
-  private tryParseJson(raw: string): Record<string, unknown> | null {
-    try {
-      return JSON.parse(raw);
-    } catch (error) {
-      this.logger.debug(
-        `Failed to parse inline tool call arguments: ${raw}. ${(error as Error).message}`,
-      );
-      return null;
-    }
+    return extractInlineToolCalls(text, this.toolNames, parsedToolCallIds, toolSchemas);
   }
 }

@@ -41,7 +41,7 @@ const mediaTypeMap: Record<CompressionFormat, ImageMediaType> = {
 
 const format = toCompressionFormat(
   process.env.SCREENSHOT_IMAGE_FORMAT,
-  "jpeg"
+  "png"
 );
 
 export const SCREENSHOT_CONFIG = {

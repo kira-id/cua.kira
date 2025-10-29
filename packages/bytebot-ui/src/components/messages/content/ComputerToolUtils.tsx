@@ -26,6 +26,7 @@ import {
   isApplicationToolUseBlock,
   isPasteTextToolUseBlock,
   isReadFileToolUseBlock,
+  isWriteFileToolUseBlock,
 } from "@bytebot/shared";
 
 // Define the IconType for proper type checking
@@ -38,7 +39,8 @@ export type IconType =
   | typeof TimeQuarter02Icon
   | typeof BrowserIcon
   | typeof FilePasteIcon
-  | typeof FileIcon;
+  | typeof FileIcon
+  | typeof FileIcon; // Using FileIcon for WriteFile as well
 
 export function getIcon(block: ComputerToolUseContentBlock): IconType {
   if (isScreenshotToolUseBlock(block)) {
@@ -83,6 +85,10 @@ export function getIcon(block: ComputerToolUseContentBlock): IconType {
 
   if (isReadFileToolUseBlock(block)) {
     return FileIcon;
+  }
+
+  if (isWriteFileToolUseBlock(block)) {
+    return FileIcon; // Using FileIcon for WriteFile as well
   }
 
   return User03Icon;
@@ -166,6 +172,10 @@ export function getLabel(block: ComputerToolUseContentBlock) {
 
   if (isReadFileToolUseBlock(block)) {
     return "Read File";
+  }
+
+  if (isWriteFileToolUseBlock(block)) {
+    return "Write File";
   }
 
   return "Unknown";

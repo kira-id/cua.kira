@@ -15,8 +15,8 @@ export const OPENROUTER_MODELS: BytebotAgentModel[] = [
   },
   {
     provider: 'openrouter',
-    name: 'anthropic/claude-3.5-sonnet',
-    title: 'Claude 3.5 Sonnet (OpenRouter)',
+    name: 'anthropic/claude-haiku-4.5',
+    title: 'Claude 4.5 Haiku (OpenRouter)',
     contextWindow: 200000,
   },
   {

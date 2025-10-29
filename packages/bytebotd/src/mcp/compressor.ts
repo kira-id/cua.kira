@@ -22,6 +22,26 @@ interface CompressionResult {
 
 class Base64ImageCompressor {
   /**
+   * Convert JPEG base64 to PNG format with best quality preservation
+   */
+  static async convertJpegToPng(base64String: string): Promise<string> {
+    // Extract base64 data (remove data URL prefix if present)
+    const base64Data = base64String.replace(/^data:image\/\w+;base64,/, '');
+    const inputBuffer = Buffer.from(base64Data, 'base64');
+
+    // Convert using Sharp with lossless PNG settings
+    const outputBuffer = await sharp(inputBuffer)
+      .png({
+        compressionLevel: 6, // Balanced compression (0-9, 6 is good balance)
+        adaptiveFiltering: true,
+        palette: false, // Keep full color depth
+      })
+      .toBuffer();
+
+    // Convert back to base64
+    return outputBuffer.toString('base64');
+  }
+  /**
    * Compress a base64 PNG string to under specified size (default 1MB)
    */
   static async compressToSize(
@@ -105,10 +125,9 @@ class Base64ImageCompressor {
       case 'png':
         return sharpInstance
           .png({
-            quality,
-            compressionLevel: 9,
+            compressionLevel: 6, // Use balanced compression instead of max (9)
             adaptiveFiltering: true,
-            palette: true,
+            palette: false, // Keep full color depth for quality
           })
           .toBuffer();
 

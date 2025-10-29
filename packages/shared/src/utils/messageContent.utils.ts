@@ -19,6 +19,7 @@ import {
   ApplicationToolUseBlock,
   PasteTextToolUseBlock,
   ReadFileToolUseBlock,
+  WriteFileToolUseBlock,
   CursorPositionToolUseBlock,
   MoveMouseToolUseBlock,
   ScreenshotToolUseBlock,
@@ -500,6 +501,13 @@ export function isCursorPositionToolUseBlock(block: MessageContentBlock): block 
 }
 export function isReadFileToolUseBlock(block: MessageContentBlock): block is ReadFileToolUseBlock {
   return block.type === MessageContentType.ToolUse && block.name === 'computer_read_file';
+}
+
+/**
+ * Type guard for WriteFileToolUseBlock
+ */
+export function isWriteFileToolUseBlock(block: MessageContentBlock): block is WriteFileToolUseBlock {
+  return block.type === MessageContentType.ToolUse && block.name === 'computer_write_file';
 }
 export function isPasteTextToolUseBlock(block: MessageContentBlock): block is PasteTextToolUseBlock {
   return block.type === MessageContentType.ToolUse && block.name === 'computer_paste_text';

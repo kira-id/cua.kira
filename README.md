@@ -1,11 +1,15 @@
 <div align="center">
 
-<img src="docs/images/bytebot-logo.png" width="500" alt="CUA.kira Logo">
+<img src="docs/images/screenshot.png" width="500" alt="CUA.kira Logo">
 
 # CUA.kira: Open-Source AI Desktop Agent
 
 CUA.kira is an actively maintained fork of [Bytebot](https://github.com/bytebot-ai/bytebot). Until dedicated docs ship, many setup links still point to the upstream project.
 
+- Qwen3VL compatible (Current SoTA)
+- Home dashboard manual control (easy reference)
+- Multi-providers: OpenRouter, Gemini, Anthropic, etc
+- Fixed bugs
 
 
 **An AI that has its own computer to complete tasks for you**

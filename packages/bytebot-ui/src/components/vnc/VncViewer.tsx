@@ -31,30 +31,10 @@ export function VncViewer({ viewOnly = true }: VncViewerProps) {
     <div
       ref={containerRef}
       className="h-full w-full"
-      style={{
-        pointerEvents: viewOnly ? 'none' : 'auto', // Allow input only when interactive
-        userSelect: 'none' // Prevent text selection
-      }}
-      {...(viewOnly && {
-        onClick: (e) => e.preventDefault(),
-        onMouseDown: (e) => e.preventDefault(),
-        onMouseUp: (e) => e.preventDefault(),
-        onKeyDown: (e) => e.preventDefault(),
-        onKeyUp: (e) => e.preventDefault(),
-      })}
-      {...(viewOnly && { tabIndex: -1 })} // Prevent focus when view-only
     >
       {VncComponent && wsUrl && (
         <VncComponent
-          rfbOptions={{
-            secure: false,
-            shared: true,
-            wsProtocols: ["binary"],
-            // Disable input at the RFB level when view-only
-            sendCtrlV: viewOnly ? false : true,
-            dragViewport: viewOnly ? false : true,
-            clipViewport: viewOnly ? false : true,
-          }}
+          key={viewOnly ? "view-only" : "interactive"} // Force remount when viewOnly changes
           focusOnClick={!viewOnly} // Focus on click when interactive
           url={wsUrl}
           scaleViewport

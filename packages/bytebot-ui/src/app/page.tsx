@@ -226,9 +226,11 @@ export default function Home() {
     setIsInteractive(nextMode);
 
     if (!activeTaskId) {
+      console.log("No active task ID, returning");
       return;
     }
 
+    console.log("handleToggleControl called with nextMode:", nextMode, "activeTaskId:", activeTaskId, "current taskStatus:", taskStatus);
     setIsUpdatingControl(true);
     try {
       let updatedTask;
@@ -237,25 +239,20 @@ export default function Home() {
         // Taking over control
         console.log("Taking over control of task:", activeTaskId);
         updatedTask = await takeOverTask(activeTaskId);
+        console.log("takeOverTask response:", updatedTask);
       } else {
-        // Switching to view-only - only resume if task is not in terminal state
-        if (taskStatus === TaskStatus.CANCELLED ||
-            taskStatus === TaskStatus.COMPLETED ||
-            taskStatus === TaskStatus.FAILED) {
-          // Task is already finished, just update UI state
-          console.log("Task is in terminal state, not resuming:", taskStatus);
-          updatedTask = activeTask;
-        } else {
-          // Task is still active, call resume to hand back control
-          console.log("Resuming task (handing back control):", activeTaskId);
-          updatedTask = await resumeTask(activeTaskId);
-        }
+        // Switching to view-only - always call resume to hand back control
+        console.log("Switching to view-only, resuming task:", activeTaskId);
+        updatedTask = await resumeTask(activeTaskId);
+        console.log("resumeTask response:", updatedTask);
       }
 
       if (!updatedTask) {
+        console.error("No response from server");
         throw new Error("No response from server");
       }
 
+      console.log("Setting states - updatedTask.control:", updatedTask.control, "Role.USER:", Role.USER, "isInteractive will be:", updatedTask.control === Role.USER);
       setActiveTask(updatedTask);
       setTaskStatus(updatedTask.status);
       setIsInteractive(updatedTask.control === Role.USER);

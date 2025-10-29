@@ -1,11 +1,13 @@
-name: bytebot
-
 services:
   bytebot-desktop:
     # Build from source
     build:
       context: ../packages/
       dockerfile: bytebotd/Dockerfile
+      cache_from:
+        - type=local,src=../.docker-cache/bytebot-desktop
+      cache_to:
+        - type=local,dest=../.docker-cache/bytebot-desktop,mode=max
     # Use pre-built image
     image: ghcr.io/bytebot-ai/bytebot-desktop:edge
     shm_size: "2g"
@@ -14,11 +16,22 @@ services:
     hostname: computer
     privileged: true
     ports:
-      - "9990:9990" # bytebotd service & noVNC
+      - "9990:9990" # bytebotd service & noVNC exposed to host
     environment:
       - DISPLAY=:0
+      - SCREENSHOT_COMPRESSION_ENABLED=${SCREENSHOT_COMPRESSION_ENABLED:-true}
+      - SCREENSHOT_TARGET_SIZE_KB=${SCREENSHOT_TARGET_SIZE_KB:-512}
+      - SCREENSHOT_INITIAL_QUALITY=${SCREENSHOT_INITIAL_QUALITY:-85}
+      - SCREENSHOT_MIN_QUALITY=${SCREENSHOT_MIN_QUALITY:-40}
+      - SCREENSHOT_MAX_WIDTH=${SCREENSHOT_MAX_WIDTH:-1024}
+      - SCREENSHOT_MAX_HEIGHT=${SCREENSHOT_MAX_HEIGHT:-768}
+      - SCREENSHOT_IMAGE_FORMAT=${SCREENSHOT_IMAGE_FORMAT:-jpeg}
     networks:
       - bytebot-network
+    volumes:
+      - bytebot_desktop_node_modules:/bytebot/bytebotd/node_modules
+      - bytebot_npm_cache:/root/.npm
+      - bytebot_node_gyp_cache:/root/.cache/node-gyp
 
   postgres:
     image: postgres:16-alpine
@@ -39,6 +52,10 @@ services:
     build:
       context: ../packages/
       dockerfile: bytebot-agent/Dockerfile
+      cache_from:
+        - type=local,src=../.docker-cache/bytebot-agent
+      cache_to:
+        - type=local,dest=../.docker-cache/bytebot-agent,mode=max
     # Use pre-built image
     image: ghcr.io/bytebot-ai/bytebot-agent:edge
     container_name: bytebot-agent
@@ -63,11 +80,19 @@ services:
       - postgres
     networks:
       - bytebot-network
+    volumes:
+      - bytebot_agent_node_modules:/app/bytebot-agent/node_modules
+      - bytebot_npm_cache:/root/.npm
+      - bytebot_node_gyp_cache:/root/.cache/node-gyp
 
   bytebot-ui:
     build:
       context: ../packages/
       dockerfile: bytebot-ui/Dockerfile
+      cache_from:
+        - type=local,src=../.docker-cache/bytebot-ui
+      cache_to:
+        - type=local,dest=../.docker-cache/bytebot-ui,mode=max
       args:
         - BYTEBOT_AGENT_BASE_URL=${BYTEBOT_AGENT_BASE_URL:-http://bytebot-agent:9991}
         - BYTEBOT_DESKTOP_VNC_URL=${BYTEBOT_DESKTOP_VNC_URL:-http://bytebot-desktop:9990/websockify}
@@ -85,6 +110,12 @@ services:
       - bytebot-agent
     networks:
       - bytebot-network
+    volumes:
+      - bytebot_ui_node_modules:/app/bytebot-ui/node_modules
+      - bytebot_ui_next_cache:/app/bytebot-ui/.next
+      - bytebot_npm_cache:/root/.npm
+      - bytebot_shared_node_modules:/app/shared/node_modules
+      - bytebot_node_gyp_cache:/root/.cache/node-gyp
 
 networks:
   bytebot-network:
@@ -92,3 +123,10 @@ networks:
 
 volumes:
   postgres_data:
+  bytebot_desktop_node_modules:
+  bytebot_agent_node_modules:
+  bytebot_ui_node_modules:
+  bytebot_ui_next_cache:
+  bytebot_npm_cache:
+  bytebot_node_gyp_cache:
+  bytebot_shared_node_modules:

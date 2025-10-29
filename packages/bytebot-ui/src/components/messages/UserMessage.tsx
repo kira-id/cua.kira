@@ -37,12 +37,14 @@ export function UserMessage({ group, messageIdToIndex }: UserMessageProps) {
                     const markers: React.ReactNode[] = [];
                     block.content.forEach((contentItem, contentIndex) => {
                       if (isImageContentBlock(contentItem)) {
+                        const screenshotId = `${message.id}-${blockIndex}-${contentIndex}`;
                         markers.push(
                           <div
                             key={`${blockIndex}-${contentIndex}`}
                             data-message-index={messageIdToIndex[message.id]}
                             data-block-index={blockIndex}
                             data-content-index={contentIndex}
+                            data-screenshot-id={screenshotId}
                             style={{
                               position: "absolute",
                               width: 0,
@@ -96,12 +98,14 @@ export function UserMessage({ group, messageIdToIndex }: UserMessageProps) {
                 const markers: React.ReactNode[] = [];
                 block.content.forEach((contentItem, contentIndex) => {
                   if (isImageContentBlock(contentItem)) {
+                    const screenshotId = `${message.id}-${blockIndex}-${contentIndex}`;
                     markers.push(
                       <div
                         key={`${blockIndex}-${contentIndex}`}
                         data-message-index={messageIdToIndex[message.id]}
                         data-block-index={blockIndex}
                         data-content-index={contentIndex}
+                        data-screenshot-id={screenshotId}
                         style={{
                           position: "absolute",
                           width: 0,

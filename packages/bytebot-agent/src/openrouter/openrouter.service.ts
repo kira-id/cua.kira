@@ -6,6 +6,7 @@ import {
   TextContentBlock,
   ToolUseContentBlock,
   ToolResultContentBlock,
+  ImageContentBlock,
   isUserActionContentBlock,
   isComputerToolUseContentBlock,
   isImageContentBlock,
@@ -20,13 +21,21 @@ import {
 } from '../agent/agent.types';
 import { BaseProvider } from '../providers/base-provider.interface';
 
+type OpenRouterMessageContentPart = {
+  type: string;
+  text?: string;
+  image_url?: { url: string; detail?: 'low' | 'high' };
+  id?: string;
+  name?: string;
+  input?: unknown;
+  arguments?: unknown;
+};
+
 interface OpenRouterMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string | Array<{
-    type: 'text' | 'image_url';
-    text?: string;
-    image_url?: { url: string };
-  }>;
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null | OpenRouterMessageContentPart[];
+  tool_calls?: OpenRouterToolCall[];
+  tool_call_id?: string;
 }
 
 interface OpenRouterToolCall {
@@ -41,7 +50,7 @@ interface OpenRouterToolCall {
 interface OpenRouterResponse {
   choices: Array<{
     message: {
-      content?: string;
+      content?: string | OpenRouterMessageContentPart[];
       tool_calls?: OpenRouterToolCall[];
     };
   }>;
@@ -57,6 +66,9 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
   private readonly logger = new Logger(OpenRouterService.name);
   private readonly apiKey: string;
   private readonly baseUrl = 'https://openrouter.ai/api/v1';
+  private readonly toolNames = new Set(
+    openrouterTools.map((tool) => tool.function.name),
+  );
 
   constructor(private readonly configService: ConfigService) {
     this.apiKey = this.configService.get<string>('OPENROUTER_API_KEY') || '';
@@ -86,16 +98,32 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
     signal?: AbortSignal,
   ): Promise<BytebotAgentResponse> {
     try {
+      this.logger.debug(
+        `OpenRouter send called with params: ${this.serializeForLog({
+          systemPrompt,
+          model,
+          useTools,
+          hasSignal: Boolean(signal),
+        })}`,
+      );
+      this.logger.debug(
+        `Raw messages input: ${this.serializeForLog(messages)}`,
+      );
+
       const openrouterMessages = this.formatMessagesForOpenRouter(
         systemPrompt,
         messages,
       );
 
+      this.logger.debug(
+        `Formatted OpenRouter messages: ${this.serializeForLog(openrouterMessages)}`,
+      );
+
       const body: any = {
         model,
         messages: openrouterMessages,
-        max_tokens: 8192,
-        temperature: 0.7,
+        // max_tokens: OPENROUTER_MODELS[model].contextWindow,
+        // temperature: 0.7,
       };
 
       if (useTools) {
@@ -103,17 +131,32 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
         body.tool_choice = 'auto';
       }
 
+      this.logger.debug(`Request body payload: ${this.serializeForLog(body)}`);
+
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.apiKey}`,
-          'HTTP-Referer': 'https://bytebot.ai',
-          'X-Title': 'Bytebot Agent',
+          'HTTP-Referer': 'https://kira.id',
+          'X-Title': 'Kira.id Agent',
         },
         body: JSON.stringify(body),
         signal,
       });
+
+      this.logger.debug(
+        `OpenRouter response status: ${response.status} ${response.statusText}`,
+      );
+      if (response.headers && typeof response.headers.entries === 'function') {
+        this.logger.debug(
+          `OpenRouter response headers: ${this.serializeForLog(
+            Object.fromEntries(response.headers.entries()),
+          )}`,
+        );
+      } else {
+        this.logger.debug('OpenRouter response headers: <unavailable in mock>');
+      }
 
       if (!response.ok) {
         if (response.status === 429) {
@@ -126,8 +169,43 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
 
       const data: OpenRouterResponse = await response.json();
 
+      this.logger.debug(
+        `OpenRouter response body: ${this.serializeForLog(data)}`,
+      );
+
+      // Check for zero completion_tokens and handle appropriately
+      if (data.usage && data.usage.completion_tokens === 0) {
+        this.handleZeroCompletionTokens(data);
+      }
+
+      const contentBlocks = this.formatOpenRouterResponse(data);
+
+      this.logger.debug(
+        `Formatted content blocks: ${this.serializeForLog(contentBlocks)}`,
+      );
+      this.logger.debug(
+        `Token usage summary: ${this.serializeForLog(data.usage)}`,
+      );
+
+      if (contentBlocks.length === 0) {
+        this.logger.warn(
+          'OpenRouter returned an empty response with no content blocks or tool calls.',
+        );
+
+        if (useTools) {
+          this.logger.warn(
+            'Retrying OpenRouter request without tools due to empty response.',
+          );
+          return this.send(systemPrompt, messages, model, false, signal);
+        }
+
+        throw new Error(
+          'OpenRouter returned an empty response without content or tool calls.',
+        );
+      }
+
       return {
-        contentBlocks: this.formatOpenRouterResponse(data),
+        contentBlocks,
         tokenUsage: {
           inputTokens: data.usage?.prompt_tokens || 0,
           outputTokens: data.usage?.completion_tokens || 0,
@@ -137,7 +215,17 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
     } catch (error: any) {
       this.logger.error(
         `Error sending message to OpenRouter: ${error.message}`,
-        error.stack,
+        {
+          error: error.message,
+          stack: error.stack,
+          model,
+          useTools,
+          systemPromptLength: systemPrompt.length,
+          messagesCount: messages.length,
+          taskId: messages.length > 0 ? messages[0].taskId : 'unknown',
+          toolNames: useTools ? openrouterTools.map(t => t.function.name) : [],
+          timestamp: new Date().toISOString()
+        },
       );
 
       if (error.name === 'AbortError') {
@@ -153,7 +241,7 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
       const response = await fetch(`${this.baseUrl}/models`, {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
-          'HTTP-Referer': 'https://bytebot.ai',
+          'HTTP-Referer': 'https://kira.id',
           'X-Title': 'Bytebot Agent',
         },
       });
@@ -168,7 +256,7 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
       const response = await fetch(`${this.baseUrl}/models`, {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
-          'HTTP-Referer': 'https://bytebot.ai',
+          'HTTP-Referer': 'https://kira.id',
           'X-Title': 'Bytebot Agent',
         },
       });
@@ -206,7 +294,7 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
         const userActionContentBlocks = messageContentBlocks.flatMap(
           (block) => block.content,
         );
-        
+
         for (const block of userActionContentBlocks) {
           if (isComputerToolUseContentBlock(block)) {
             openrouterMessages.push({
@@ -214,61 +302,84 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
               content: `User performed action: ${block.name}\n${JSON.stringify(block.input, null, 2)}`,
             });
           } else if (isImageContentBlock(block)) {
-            openrouterMessages.push({
-              role: 'user',
-              content: [
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:${block.source.media_type};base64,${block.source.data}`,
-                  },
-                },
-              ],
-            });
+            openrouterMessages.push(
+              this.createImageMessage('user', block as ImageContentBlock),
+            );
           }
         }
-      } else {
-        // Convert content blocks to OpenRouter format
-        for (const block of messageContentBlocks) {
-          switch (block.type) {
-            case MessageContentType.Text: {
-              openrouterMessages.push({
-                role: message.role === Role.USER ? 'user' : 'assistant',
-                content: block.text,
-              });
-              break;
-            }
-            case MessageContentType.ToolUse: {
-              if (message.role === Role.ASSISTANT) {
-                const toolBlock = block as ToolUseContentBlock;
-                openrouterMessages.push({
-                  role: 'assistant',
-                  content: null as any, // OpenRouter expects null for tool calls
-                });
-                // Note: OpenRouter tool calls would be handled differently in the actual implementation
-                // This is a simplified version
-              }
-              break;
-            }
-            case MessageContentType.ToolResult: {
-              const toolResult = block as ToolResultContentBlock;
-              toolResult.content.forEach((content) => {
-                if (content.type === MessageContentType.Text) {
-                  openrouterMessages.push({
-                    role: 'user',
-                    content: `Tool result: ${content.text}`,
-                  });
-                }
-              });
-              break;
-            }
-            default:
-              // Handle unknown content types as text
-              openrouterMessages.push({
-                role: 'user',
-                content: JSON.stringify(block),
-              });
+        continue;
+      }
+
+      // Convert content blocks to OpenRouter format
+      for (const block of messageContentBlocks) {
+        switch (block.type) {
+          case MessageContentType.Text: {
+            openrouterMessages.push({
+              role: message.role === Role.USER ? 'user' : 'assistant',
+              content: block.text,
+            });
+            break;
           }
+          case MessageContentType.Image: {
+            const imageBlock = block as ImageContentBlock;
+            openrouterMessages.push(
+              this.createImageMessage(
+                message.role === Role.USER ? 'user' : 'assistant',
+                imageBlock,
+              ),
+            );
+            break;
+          }
+          case MessageContentType.ToolUse: {
+            if (message.role === Role.ASSISTANT) {
+              const toolBlock = block as ToolUseContentBlock;
+              openrouterMessages.push({
+                role: 'assistant',
+                content: '',
+                tool_calls: [
+                  {
+                    id: toolBlock.id,
+                    type: 'function',
+                    function: {
+                      name: toolBlock.name,
+                      arguments: JSON.stringify(toolBlock.input ?? {}),
+                    },
+                  },
+                ],
+              });
+            }
+            break;
+          }
+          case MessageContentType.ToolResult: {
+            const toolResult = block as ToolResultContentBlock;
+            const textOutputs = toolResult.content
+              .filter((content) => content.type === MessageContentType.Text)
+              .map((content) => (content as TextContentBlock).text)
+              .filter((text) => text.trim().length > 0);
+            const imageContents = toolResult.content.filter(
+              (content) => content.type === MessageContentType.Image,
+            ) as ImageContentBlock[];
+
+            const toolContent = textOutputs.join('\n').trim();
+            openrouterMessages.push({
+              role: 'tool',
+              tool_call_id: toolResult.tool_use_id,
+              content: toolContent,
+            });
+
+            imageContents.forEach((imageContent) => {
+              openrouterMessages.push(
+                this.createImageMessage('user', imageContent),
+              );
+            });
+            break;
+          }
+          default:
+            // Handle unknown content types as text
+            openrouterMessages.push({
+              role: 'user',
+              content: JSON.stringify(block),
+            });
         }
       }
     }
@@ -280,6 +391,7 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
     response: OpenRouterResponse,
   ): MessageContentBlock[] {
     const contentBlocks: MessageContentBlock[] = [];
+    const parsedToolCallIds = new Set<string>();
 
     if (response.choices && response.choices.length > 0) {
       const choice = response.choices[0];
@@ -287,25 +399,297 @@ export class OpenRouterService implements BytebotAgentService, BaseProvider {
 
       // Handle text content
       if (message.content) {
-        contentBlocks.push({
-          type: MessageContentType.Text,
-          text: message.content,
-        } as TextContentBlock);
+        if (Array.isArray(message.content)) {
+          const textParts: string[] = [];
+          const toolUseBlocksFromContent: ToolUseContentBlock[] = [];
+
+    for (const part of message.content) {
+      if (
+        (part.type === 'text' || part.type === 'output_text') &&
+        typeof part.text === 'string' &&
+        part.text.trim().length > 0
+      ) {
+        textParts.push(part.text);
+      }
+
+      if (
+        part.type === 'tool_use' ||
+        part.type === 'function_call' ||
+        part.type === 'function'
+      ) {
+        const toolUseId =
+          part.id || `openrouter-tool-${parsedToolCallIds.size + 1}`;
+        parsedToolCallIds.add(toolUseId);
+
+        const toolInput = this.parseToolInput(part.input ?? part.arguments);
+        if (typeof part.name === 'string') {
+          toolUseBlocksFromContent.push({
+            type: MessageContentType.ToolUse,
+            id: toolUseId,
+            name: part.name,
+            input: toolInput,
+          } as ToolUseContentBlock);
+        }
+      }
+          }
+
+          if (textParts.length > 0) {
+            contentBlocks.push({
+              type: MessageContentType.Text,
+              text: textParts.join('\n'),
+            } as TextContentBlock);
+          }
+
+          toolUseBlocksFromContent.forEach((block) => {
+            contentBlocks.push(block);
+          });
+        } else if (
+          typeof message.content === 'string' &&
+          message.content.trim().length > 0
+        ) {
+          let remainingText = message.content;
+
+          if (!message.tool_calls || message.tool_calls.length === 0) {
+            const inlineToolResult = this.extractInlineToolCalls(
+              remainingText,
+              parsedToolCallIds,
+            );
+            remainingText = inlineToolResult.remainingText;
+            inlineToolResult.toolBlocks.forEach((block) => {
+              contentBlocks.push(block);
+            });
+          }
+
+          if (remainingText.trim().length > 0) {
+            contentBlocks.push({
+              type: MessageContentType.Text,
+              text: remainingText.trim(),
+            } as TextContentBlock);
+          }
+        }
       }
 
       // Handle tool calls
       if (message.tool_calls && message.tool_calls.length > 0) {
         for (const toolCall of message.tool_calls) {
+          if (parsedToolCallIds.has(toolCall.id)) {
+            continue;
+          }
+
+          let parsedArguments: Record<string, unknown> = {};
+          try {
+            parsedArguments = toolCall.function.arguments
+              ? JSON.parse(toolCall.function.arguments)
+              : {};
+          } catch (error) {
+            this.logger.warn(
+              `Failed to parse tool call arguments for ${toolCall.function.name}: ${toolCall.function.arguments}`,
+            );
+          }
+
           contentBlocks.push({
             type: MessageContentType.ToolUse,
             id: toolCall.id,
             name: toolCall.function.name,
-            input: JSON.parse(toolCall.function.arguments),
+            input: parsedArguments,
           } as ToolUseContentBlock);
+
+          parsedToolCallIds.add(toolCall.id);
         }
+      }
+
+      const refusal =
+        typeof (message as any).refusal === 'string'
+          ? (message as any).refusal
+          : undefined;
+
+      if (refusal && refusal.trim().length > 0) {
+        contentBlocks.push({
+          type: MessageContentType.Text,
+          text: `Refusal: ${refusal}`,
+        } as TextContentBlock);
       }
     }
 
     return contentBlocks;
+  }
+
+  private parseToolInput(rawInput: unknown): Record<string, unknown> {
+    if (!rawInput) {
+      return {};
+    }
+
+    if (typeof rawInput === 'string') {
+      try {
+        return JSON.parse(rawInput);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to parse tool input from string: ${rawInput}`,
+        );
+        return {};
+      }
+    }
+
+    if (typeof rawInput === 'object') {
+      return rawInput as Record<string, unknown>;
+    }
+
+    return {};
+  }
+
+  private createImageMessage(
+    role: 'user' | 'assistant',
+    image: ImageContentBlock,
+  ): OpenRouterMessage {
+    return {
+      role,
+      content: [
+        {
+          type: 'image_url',
+          image_url: {
+            url: `data:${image.source.media_type};base64,${image.source.data}`,
+            detail: 'high',
+          },
+        },
+      ],
+    };
+  }
+
+  private extractInlineToolCalls(
+    text: string,
+    parsedToolCallIds: Set<string>,
+  ): { remainingText: string; toolBlocks: ToolUseContentBlock[] } {
+    let remaining = text;
+    const toolBlocks: ToolUseContentBlock[] = [];
+
+    for (const toolName of this.toolNames) {
+      let searchIndex = 0;
+
+      while (searchIndex < remaining.length) {
+        const invocationIndex = remaining.indexOf(`${toolName}(`, searchIndex);
+        if (invocationIndex === -1) {
+          break;
+        }
+
+        const argsStart = remaining.indexOf('{', invocationIndex);
+        if (argsStart === -1) {
+          searchIndex = invocationIndex + toolName.length;
+          continue;
+        }
+
+        const argsEnd = this.findMatchingClosingBrace(remaining, argsStart);
+        if (argsEnd === -1) {
+          searchIndex = invocationIndex + toolName.length;
+          continue;
+        }
+
+        const closingParenIndex = remaining.indexOf(')', argsEnd);
+        if (closingParenIndex === -1) {
+          searchIndex = invocationIndex + toolName.length;
+          continue;
+        }
+
+        const rawArguments = remaining.slice(argsStart, argsEnd + 1);
+        const parsedArguments = this.tryParseJson(rawArguments);
+
+        if (!parsedArguments) {
+          searchIndex = invocationIndex + toolName.length;
+          continue;
+        }
+
+        const toolId = `inline-tool-${parsedToolCallIds.size + toolBlocks.length + 1}`;
+        toolBlocks.push({
+          type: MessageContentType.ToolUse,
+          id: toolId,
+          name: toolName,
+          input: parsedArguments,
+        } as ToolUseContentBlock);
+        parsedToolCallIds.add(toolId);
+
+        remaining =
+          remaining.slice(0, invocationIndex) +
+          remaining.slice(closingParenIndex + 1);
+        searchIndex = invocationIndex;
+      }
+    }
+
+    return {
+      remainingText: remaining.trim(),
+      toolBlocks,
+    };
+  }
+
+  private findMatchingClosingBrace(text: string, startIndex: number): number {
+    let depth = 0;
+
+    for (let i = startIndex; i < text.length; i++) {
+      const char = text[i];
+
+      if (char === '{') {
+        depth++;
+      } else if (char === '}') {
+        depth--;
+
+        if (depth === 0) {
+          return i;
+        }
+      }
+    }
+
+    return -1;
+  }
+
+  private tryParseJson(raw: string): Record<string, unknown> | null {
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      this.logger.debug(
+        `Failed to parse inline tool call arguments: ${raw}. ${(error as Error).message}`,
+      );
+      return null;
+    }
+  }
+
+  private handleZeroCompletionTokens(data: OpenRouterResponse): void {
+    const choice = data.choices?.[0];
+    const message = choice?.message;
+
+    // Check for tool-call only response
+    if (message?.tool_calls && message.tool_calls.length > 0) {
+      this.logger.warn(
+        'Zero completion_tokens detected: Tool-call only response. This is normal behavior - OpenRouter does not count tool arguments as completion tokens.',
+      );
+      return;
+    }
+
+    // Check for empty content
+    const hasContent =
+      (typeof message?.content === 'string' && message.content.trim().length > 0) ||
+      (Array.isArray(message?.content) && message.content.some(part =>
+        typeof part.text === 'string' && part.text.trim().length > 0
+      ));
+
+    if (!hasContent) {
+      this.logger.warn(
+        'Zero completion_tokens detected: Truly empty assistant message. Possible causes: brittle stop strings, invalid response_format/JSON schema, too small max_output_tokens, or model safety/guardrail silently blanking output.',
+      );
+      return;
+    }
+
+    // Check for streaming aggregation loss (though this is less likely in non-streaming mode)
+    this.logger.warn(
+      'Zero completion_tokens detected: Unknown cause. May be due to streaming aggregation loss or provider/model quirk with tool_choice:"required".',
+    );
+  }
+
+  private serializeForLog(value: unknown): string {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch (error) {
+      if (error instanceof Error) {
+        return `Failed to serialize value for log: ${error.message}`;
+      }
+      return 'Failed to serialize value for log';
+    }
   }
 }

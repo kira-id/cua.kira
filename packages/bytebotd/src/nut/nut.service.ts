@@ -473,8 +473,14 @@ export class NutService {
     this.logger.log(`Taking screenshot to ${filepath}`);
 
     try {
-      // Take screenshot
-      await screen.capture(filename, FileType.PNG, this.screenshotDir);
+      // Use scrot with --pointer to capture screenshot including mouse cursor
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+
+      await execAsync(`scrot --pointer --quality 100 "${filepath}"`, {
+        env: { ...process.env, DISPLAY: ':0.0' },
+      });
 
       // Read the file back and return as buffer
       return await import('fs').then((fs) => fs.promises.readFile(filepath));

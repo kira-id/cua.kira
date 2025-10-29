@@ -1,11 +1,27 @@
 import { Message } from "@/types";
-import { isToolResultContentBlock, isImageContentBlock } from "@bytebot/shared";
+import {
+  ImageMediaType,
+  Coordinates,
+  isToolResultContentBlock,
+  isImageContentBlock,
+  isComputerToolUseContentBlock,
+  isMoveMouseToolUseBlock,
+  isTraceMouseToolUseBlock,
+  isClickMouseToolUseBlock,
+  isDragMouseToolUseBlock,
+  isScrollToolUseBlock,
+  isTextContentBlock,
+  ComputerToolUseContentBlock,
+} from "@bytebot/shared";
 
 export interface ScreenshotData {
   id: string;
   base64Data: string;
+  mediaType: ImageMediaType;
   messageIndex: number;
   blockIndex: number;
+  contentIndex: number;
+  cursor?: Coordinates | null;
 }
 
 /**
@@ -13,19 +29,126 @@ export interface ScreenshotData {
  */
 export function extractScreenshots(messages: Message[]): ScreenshotData[] {
   const screenshots: ScreenshotData[] = [];
-  
+  const pendingCursorRequests = new Set<string>();
+  let lastCursorPosition: Coordinates | null = null;
+
+  const updateCursorFromToolUse = (
+    blockCoordinates?: Coordinates | null,
+  ): void => {
+    if (!blockCoordinates) {
+      return;
+    }
+    lastCursorPosition = { ...blockCoordinates };
+  };
+
+  const extractCoordinatesFromToolUse = (
+    toolBlock: ComputerToolUseContentBlock,
+  ): Coordinates | null => {
+    if (isMoveMouseToolUseBlock(toolBlock)) {
+      return toolBlock.input.coordinates ?? null;
+    }
+
+    if (isClickMouseToolUseBlock(toolBlock)) {
+      return toolBlock.input.coordinates ?? null;
+    }
+
+    if (
+      isTraceMouseToolUseBlock(toolBlock) &&
+      Array.isArray(toolBlock.input.path) &&
+      toolBlock.input.path.length > 0
+    ) {
+      return toolBlock.input.path[toolBlock.input.path.length - 1] ?? null;
+    }
+
+    if (
+      isDragMouseToolUseBlock(toolBlock) &&
+      Array.isArray(toolBlock.input.path) &&
+      toolBlock.input.path.length > 0
+    ) {
+      return toolBlock.input.path[toolBlock.input.path.length - 1] ?? null;
+    }
+
+    if (isScrollToolUseBlock(toolBlock)) {
+      return toolBlock.input.coordinates ?? null;
+    }
+
+    return null;
+  };
+
+  const tryParseCursorText = (text: string): Coordinates | null => {
+    // Try to match "Cursor position: X, Y" format
+    const cursorPositionMatch = text.match(/Cursor position:\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/i);
+    if (cursorPositionMatch) {
+      const [, xRaw, yRaw] = cursorPositionMatch;
+      const x = Number.parseFloat(xRaw);
+      const y = Number.parseFloat(yRaw);
+
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        return null;
+      }
+
+      return { x, y };
+    }
+
+    // Fallback to general coordinate parsing
+    const match = text.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+    if (!match) {
+      return null;
+    }
+
+    const [, xRaw, yRaw] = match;
+    const x = Number.parseFloat(xRaw);
+    const y = Number.parseFloat(yRaw);
+
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return null;
+    }
+
+    return { x, y };
+  };
+
   messages.forEach((message, messageIndex) => {
     message.content.forEach((block, blockIndex) => {
+      if (isComputerToolUseContentBlock(block)) {
+        if (block.name === "computer_cursor_position") {
+          pendingCursorRequests.add(block.id);
+        }
+
+        updateCursorFromToolUse(extractCoordinatesFromToolUse(block));
+      }
+
       // Check if this is a tool result block with images
       if (isToolResultContentBlock(block) && block.content && block.content.length > 0) {
+        if (pendingCursorRequests.has(block.tool_use_id)) {
+          const cursorFromResult = block.content
+            .filter(isTextContentBlock)
+            .map((contentItem) => tryParseCursorText(contentItem.text))
+            .find((coords): coords is Coordinates => Boolean(coords));
+
+          if (cursorFromResult) {
+            updateCursorFromToolUse(cursorFromResult);
+          } else {
+            // Log when cursor position parsing fails for debugging
+            const textContents = block.content
+              .filter(isTextContentBlock)
+              .map((contentItem) => contentItem.text);
+            console.warn('Failed to parse cursor position from tool result:', textContents);
+          }
+
+          pendingCursorRequests.delete(block.tool_use_id);
+        }
+
         // Check ALL content items in the tool result, not just the first one
         block.content.forEach((contentItem, contentIndex) => {
           if (isImageContentBlock(contentItem)) {
             screenshots.push({
               id: `${message.id}-${blockIndex}-${contentIndex}`,
               base64Data: contentItem.source.data,
+              mediaType: contentItem.source.media_type,
               messageIndex,
               blockIndex,
+              contentIndex,
+              cursor: lastCursorPosition ? { ...lastCursorPosition } : null,
             });
           }
         });

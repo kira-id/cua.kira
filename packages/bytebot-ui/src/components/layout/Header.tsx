@@ -83,10 +83,10 @@ export function Header() {
             <span className="text-sm">Settings</span>
           </Link>
           <Link
-            href="https://docs.bytebot.ai/quickstart"
+            href="https://docs.kira.id/quickstart"
             target="_blank"
             rel="noopener noreferrer"
-            className={getLinkClasses("https://docs.bytebot.ai")}
+            className={getLinkClasses("https://docs.kira.id")}
           >
             <HugeiconsIcon icon={DocumentCodeIcon} className="h-4 w-4" />
             <span className="text-sm">Docs</span>

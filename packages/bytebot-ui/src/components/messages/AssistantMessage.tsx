@@ -10,12 +10,14 @@ interface AssistantMessageProps {
   group: GroupedMessages;
   taskStatus: TaskStatus;
   messageIdToIndex: Record<string, number>;
+  onScreenshotSelect?: (screenshotId: string) => void;
 }
 
 export function AssistantMessage({
   group,
   taskStatus,
   messageIdToIndex,
+  onScreenshotSelect,
 }: AssistantMessageProps) {
   return (
     <div className={
@@ -56,12 +58,14 @@ export function AssistantMessage({
                     const markers: React.ReactNode[] = [];
                     block.content.forEach((contentItem, contentIndex) => {
                       if (isImageContentBlock(contentItem)) {
+                        const screenshotId = `${message.id}-${blockIndex}-${contentIndex}`;
                         markers.push(
                           <div
                             key={`${blockIndex}-${contentIndex}`}
                             data-message-index={messageIdToIndex[message.id]}
                             data-block-index={blockIndex}
                             data-content-index={contentIndex}
+                            data-screenshot-id={screenshotId}
                             style={{
                               position: "absolute",
                               width: 0,
@@ -79,6 +83,8 @@ export function AssistantMessage({
                 <MessageContent
                   content={message.content}
                   isTakeOver={message.take_over}
+                  messageId={message.id}
+                  onScreenshotSelect={onScreenshotSelect}
                 />
               </div>
             ))}
@@ -103,12 +109,14 @@ export function AssistantMessage({
                   const markers: React.ReactNode[] = [];
                   block.content.forEach((contentItem, contentIndex) => {
                     if (isImageContentBlock(contentItem)) {
+                      const screenshotId = `${message.id}-${blockIndex}-${contentIndex}`;
                       markers.push(
                         <div
                           key={`${blockIndex}-${contentIndex}`}
                           data-message-index={messageIdToIndex[message.id]}
                           data-block-index={blockIndex}
                           data-content-index={contentIndex}
+                          data-screenshot-id={screenshotId}
                           style={{
                             position: "absolute",
                             width: 0,
@@ -126,6 +134,8 @@ export function AssistantMessage({
               <MessageContent
                 content={message.content}
                 isTakeOver={message.take_over}
+                messageId={message.id}
+                onScreenshotSelect={onScreenshotSelect}
               />
             </div>
           ))}

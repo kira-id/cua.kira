@@ -15,6 +15,7 @@ import {
   ScreenshotToolUseBlock,
   ToolResultContentBlock,
   UserActionContentBlock,
+  ImageMediaType,
 } from '@bytebot/shared';
 import { Role } from '@prisma/client';
 import { MessagesService } from '../messages/messages.service';
@@ -58,11 +59,20 @@ export class InputCaptureService {
 
     this.socket.on(
       'screenshotAndAction',
-      async (shot: { image: string }, action: any) => {
+      async (
+        shot: { image: string; mediaType?: string },
+        action: any,
+      ) => {
         if (!this.capturing || !taskId) return;
         // The gateway only sends a click_mouse or drag_mouse action together with screenshots for now.
         if (action.action !== 'click_mouse' && action.action !== 'drag_mouse')
           return;
+
+        const mediaType: ImageMediaType =
+          typeof shot.mediaType === 'string' &&
+          ['image/png', 'image/jpeg', 'image/webp'].includes(shot.mediaType)
+            ? (shot.mediaType as ImageMediaType)
+            : 'image/png';
 
         const userActionBlock: UserActionContentBlock = {
           type: MessageContentType.UserAction,
@@ -71,7 +81,7 @@ export class InputCaptureService {
               type: MessageContentType.Image,
               source: {
                 data: shot.image,
-                media_type: 'image/png',
+                media_type: mediaType,
                 type: 'base64',
               },
             },

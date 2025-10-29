@@ -24,6 +24,7 @@ import {
   MessageContentType,
   ToolResultContentBlock,
   TextContentBlock,
+  getDesktopBaseUrl,
 } from '@bytebot/shared';
 import { InputCaptureService } from './input-capture.service';
 import { OnEvent } from '@nestjs/event-emitter';
@@ -46,8 +47,15 @@ export class AgentProcessor {
   private isProcessing = false;
   private abortController: AbortController | null = null;
 
-  private readonly BYTEBOT_DESKTOP_BASE_URL = process.env
-    .BYTEBOT_DESKTOP_BASE_URL as string;
+  private desktopBaseUrlCache: string | null = null;
+
+  private desktopBaseUrl(): string {
+    if (!this.desktopBaseUrlCache) {
+      this.desktopBaseUrlCache = getDesktopBaseUrl();
+    }
+
+    return this.desktopBaseUrlCache;
+  }
 
   constructor(
     private readonly tasksService: TasksService,
@@ -192,7 +200,7 @@ export class AgentProcessor {
           mcpServers: {
             desktop: {
               type: 'sse',
-              url: `${this.BYTEBOT_DESKTOP_BASE_URL}/mcp`,
+              url: `${this.desktopBaseUrl()}/mcp`,
             },
           },
         },

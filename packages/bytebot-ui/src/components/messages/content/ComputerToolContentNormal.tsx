@@ -11,6 +11,7 @@ import {
   Application,
   isPasteTextToolUseBlock,
   isReadFileToolUseBlock,
+  isCursorPositionToolUseBlock,
 } from "@bytebot/shared";
 import { getIcon, getLabel } from "./ComputerToolUtils";
 
@@ -22,6 +23,7 @@ const applicationMap: Record<Application, string> = {
   firefox: "Firefox",
   "1password": "1Password",
   thunderbird: "Thunderbird",
+  blender: "Blender",
   vscode: "Visual Studio Code",
   terminal: "Terminal",
   directory: "File Manager",
@@ -80,6 +82,11 @@ function ToolDetailsNormal({ block }: { block: ComputerToolUseContentBlock }) {
             {block.input.path[block.input.path.length - 1].y}
           </p>
         )}
+
+      {/* Cursor position information */}
+      {isCursorPositionToolUseBlock(block) && (
+        <p className={baseClasses}>Getting mouse cursor position</p>
+      )}
 
       {/* Scroll information */}
       {isScrollToolUseBlock(block) && (

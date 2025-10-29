@@ -83,22 +83,19 @@ export default function TaskPage() {
   }
 
   // Use scroll screenshot hook for inactive tasks
-  const { currentScreenshot } = useScrollScreenshot({
+  const { currentScreenshot, selectScreenshotById } = useScrollScreenshot({
     messages,
     scrollContainerRef: chatContainerRef,
   });
 
+  const taskIsInactive = isTaskInactive();
+
   // For inactive tasks, auto-load all messages for proper screenshot navigation
   useEffect(() => {
-    if (isTaskInactive() && hasMoreMessages && !isLoadingMoreMessages) {
+    if (taskIsInactive && hasMoreMessages && !isLoadingMoreMessages) {
       loadMoreMessages();
     }
-  }, [
-    isTaskInactive(),
-    hasMoreMessages,
-    isLoadingMoreMessages,
-    loadMoreMessages,
-  ]);
+  }, [taskIsInactive, hasMoreMessages, isLoadingMoreMessages, loadMoreMessages]);
 
   // Map each message ID to its flat index for screenshot scroll logic
   const messageIdToIndex = React.useMemo(() => {
@@ -125,7 +122,7 @@ export default function TaskPage() {
           {/* Main container */}
           <div className="col-span-4">
             <DesktopContainer
-              screenshot={isTaskInactive() ? currentScreenshot : null}
+              screenshot={taskIsInactive ? currentScreenshot : null}
               viewOnly={vncViewOnly()}
               status={
                 (() => {
@@ -210,6 +207,7 @@ export default function TaskPage() {
                 isLoadingMoreMessages={isLoadingMoreMessages}
                 hasMoreMessages={hasMoreMessages}
                 loadMoreMessages={loadMoreMessages}
+                onScreenshotSelect={selectScreenshotById}
               />
             </div>
           </div>

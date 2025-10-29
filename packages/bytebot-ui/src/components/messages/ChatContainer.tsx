@@ -21,6 +21,7 @@ interface ChatContainerProps {
   isLoadingMoreMessages: boolean;
   hasMoreMessages: boolean;
   loadMoreMessages: () => Promise<void>;
+  onScreenshotSelect?: (screenshotId: string) => void;
 }
 
 export function ChatContainer({
@@ -37,6 +38,7 @@ export function ChatContainer({
   isLoadingMoreMessages,
   hasMoreMessages,
   loadMoreMessages,
+  onScreenshotSelect,
 }: ChatContainerProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -96,6 +98,7 @@ export function ChatContainer({
                   group={group}
                   messageIdToIndex={messageIdToIndex}
                   taskStatus={taskStatus}
+                  onScreenshotSelect={onScreenshotSelect}
                 />
               </Fragment>
             ))}

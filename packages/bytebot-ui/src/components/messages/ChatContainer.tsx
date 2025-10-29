@@ -112,7 +112,7 @@ export function ChatContainer({
                       <Loader size={20} />
                     </div>
                     <TextShimmer className="text-sm" duration={2}>
-                      Bytebot is working...
+                      Kira is working...
                     </TextShimmer>
                   </div>
                 </div>
